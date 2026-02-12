@@ -60,7 +60,7 @@ const Modal = ({ isOpen, onClose, children }: ModalProps) => {
               damping: 25,
               stiffness: 300,
             }}
-            className="relative w-full max-w-lg transform overflow-hidden rounded-xl bg-white shadow-2xl"
+            className="relative w-full max-w-lg transform overflow-hidden rounded-3xl bg-white shadow-2xl"
           >
             {children}
           </motion.div>

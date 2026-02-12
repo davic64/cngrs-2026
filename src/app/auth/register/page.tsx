@@ -14,6 +14,7 @@ import {
 import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
@@ -30,13 +31,14 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
+  User
 } from "lucide-react";
 import * as React from "react";
 
 type FormData = {
   nombre: string;
   apellido: string;
-  email: string; // Keep in type for now but won't use it in UI
+  email: string;
   password: string;
   edad: string;
   genero: string;
@@ -51,6 +53,7 @@ type FormData = {
   padecimiento: string;
   medicamento: string;
   dosisFrecuencia: string;
+  fotoPerfil: File | null;
   tallaPlayera: string;
   aceptaTerminos: boolean;
   tipoPago: "completo" | "inscripcion" | "";
@@ -59,6 +62,7 @@ type FormData = {
 };
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [step, setStep] = React.useState(1);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isProcessing, setIsProcessing] = React.useState(false);
@@ -66,6 +70,7 @@ export default function RegisterPage() {
     "success" | "error" | null
   >(null);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
+  const [profilePreviewUrl, setProfilePreviewUrl] = React.useState<string | null>(null);
   const [comprobantePreview, setComprobantePreview] = React.useState<
     string | null
   >(null);
@@ -88,6 +93,7 @@ export default function RegisterPage() {
     padecimiento: "",
     medicamento: "",
     dosisFrecuencia: "",
+    fotoPerfil: null,
     tallaPlayera: "",
     aceptaTerminos: false,
     tipoPago: "",
@@ -126,9 +132,10 @@ export default function RegisterPage() {
     formData.padecimiento &&
     formData.medicamento &&
     formData.dosisFrecuencia;
-  const isStep5Valid = formData.tallaPlayera && formData.aceptaTerminos;
-  const isStep6Valid = formData.tipoPago && formData.metodoPago;
-  const isStep7Valid =
+  const isStep5Valid = !!formData.fotoPerfil;
+  const isStep6Valid = formData.tallaPlayera && formData.aceptaTerminos;
+  const isStep7Valid = formData.tipoPago && formData.metodoPago;
+  const isStep8Valid =
     formData.metodoPago === "tarjeta" ? true : !!formData.comprobantePago;
 
   const handleNext = () => {
@@ -143,16 +150,14 @@ export default function RegisterPage() {
     setIsProcessing(true);
     setPaymentStatus(null);
 
-    // Simulamos latencia de red
     await new Promise((resolve) => setTimeout(resolve, 2500));
 
-    // 80% de probabilidad de éxito
     const isSuccess = Math.random() > 0.2;
 
     setIsProcessing(false);
     if (isSuccess) {
       setPaymentStatus("success");
-      setTimeout(() => setStep(8), 1500);
+      setTimeout(() => setStep(9), 1500);
     } else {
       setPaymentStatus("error");
     }
@@ -162,7 +167,7 @@ export default function RegisterPage() {
     if (formData.metodoPago === "tarjeta") {
       simulateStripePayment();
     } else {
-      setStep(8);
+      setStep(9);
     }
   };
 
@@ -170,13 +175,14 @@ export default function RegisterPage() {
 
   const handleFileChange = (
     e: React.ChangeEvent<HTMLInputElement>,
-    field: "documento" | "comprobantePago",
+    field: "documento" | "comprobantePago" | "fotoPerfil",
   ) => {
     const file = e.target.files?.[0] || null;
     setFormData({ ...formData, [field]: file });
     if (file && file.type.startsWith("image/")) {
       const url = URL.createObjectURL(file);
       if (field === "documento") setPreviewUrl(url);
+      else if (field === "fotoPerfil") setProfilePreviewUrl(url);
       else setComprobantePreview(url);
     }
   };
@@ -218,7 +224,7 @@ export default function RegisterPage() {
                 className="space-y-5 sm:space-y-6 bg-white p-5 sm:p-8 rounded-[2rem] shadow-xl shadow-black/5 border border-gray-100"
               >
                 <div className="space-y-4">
-                  <h2 className="text-lg sm:text-xl font-bold text-secondary">
+                  <h2 className="text-lg sm:text-xl font-bold text-secondary uppercase tracking-tight">
                     Crea tu Cuenta
                   </h2>
                   <div className="grid grid-cols-2 gap-4">
@@ -299,7 +305,7 @@ export default function RegisterPage() {
                     ) : (
                       <Button
                         variant="outline"
-                        className="w-full border-dashed border-2 h-16 rounded-2xl flex flex-col items-center justify-center gap-1 group"
+                        className="w-full border-dashed border-2 h-16 flex flex-col items-center justify-center gap-1 group"
                         onClick={() => setIsModalOpen(true)}
                       >
                         <UserPlus className="h-5 w-5 text-primary group-hover:scale-110" />
@@ -311,7 +317,7 @@ export default function RegisterPage() {
                   </div>
                 </div>
                 <Button
-                  className="w-full h-14 rounded-2xl text-base font-bold shadow-lg shadow-primary/20"
+                  className="w-full h-14 text-base font-bold shadow-lg shadow-primary/20"
                   disabled={!isStep1Valid}
                   onClick={handleNext}
                 >
@@ -320,7 +326,6 @@ export default function RegisterPage() {
               </motion.div>
             )}
 
-            {/* Steps 2-5 permanecen similares pero con el botón de revisión ajustado */}
             {step === 2 && (
               <motion.div
                 key="step2"
@@ -330,7 +335,7 @@ export default function RegisterPage() {
                 className="space-y-6 bg-white p-5 sm:p-8 rounded-[2rem] shadow-xl border border-gray-100"
               >
                 <div className="space-y-4">
-                  <h2 className="text-lg font-bold text-secondary">
+                  <h2 className="text-lg font-bold text-secondary uppercase tracking-tight">
                     Documentación
                   </h2>
                   <div className="relative">
@@ -351,19 +356,20 @@ export default function RegisterPage() {
                           </div>
                         )}
                         <button
+                          type="button"
                           onClick={() => {
                             setFormData({ ...formData, documento: null });
                             setPreviewUrl(null);
                           }}
-                          className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-full"
+                          className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-full cursor-pointer"
                         >
                           <X className="h-4 w-4" />
                         </button>
                       </div>
                     ) : (
-                      <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-gray-200 rounded-3xl cursor-pointer hover:bg-gray-50">
+                      <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-gray-200 rounded-3xl cursor-pointer hover:bg-gray-50 transition-all">
                         <Camera className="h-10 w-10 text-primary mb-2" />
-                        <span className="text-sm font-bold text-secondary">
+                        <span className="text-sm font-bold text-secondary text-center px-4">
                           {needsResponsiva
                             ? "Subir Carta Responsiva"
                             : "Tomar foto de INE"}
@@ -381,14 +387,13 @@ export default function RegisterPage() {
                 <div className="flex gap-3">
                   <Button
                     variant="outline"
-                    className="flex-1 h-14 rounded-2xl"
+                    className="flex-1 h-14"
                     onClick={handleBack}
                   >
-                    <ArrowLeft className="mr-2 h-4 w-4" />
                     Atrás
                   </Button>
                   <Button
-                    className="flex-[2] h-14 rounded-2xl font-bold shadow-lg"
+                    className="flex-[2] h-14 font-bold shadow-lg"
                     disabled={!isStep2Valid}
                     onClick={handleNext}
                   >
@@ -398,13 +403,15 @@ export default function RegisterPage() {
               </motion.div>
             )}
 
-            {/* Step 3 (Ubicación) y Step 4 (Salud) resumidos para brevedad, igual que antes */}
             {step === 3 && (
               <motion.div
                 key="step3"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}
                 className="space-y-6 bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100"
               >
-                <h2 className="text-lg font-bold text-secondary">Ubicación</h2>
+                <h2 className="text-lg font-bold text-secondary uppercase tracking-tight">Ubicación</h2>
                 <Select
                   label="País"
                   options={[
@@ -433,13 +440,13 @@ export default function RegisterPage() {
                 <div className="flex gap-3">
                   <Button
                     variant="outline"
-                    className="flex-1 h-14 rounded-2xl"
+                    className="flex-1 h-14"
                     onClick={handleBack}
                   >
                     Atrás
                   </Button>
                   <Button
-                    className="flex-[2] h-14 rounded-2xl font-bold"
+                    className="flex-[2] h-14 font-bold"
                     disabled={!isStep3Valid}
                     onClick={handleNext}
                   >
@@ -452,9 +459,12 @@ export default function RegisterPage() {
             {step === 4 && (
               <motion.div
                 key="step4"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}
                 className="space-y-6 bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100"
               >
-                <h2 className="text-lg font-bold text-secondary">Salud</h2>
+                <h2 className="text-lg font-bold text-secondary uppercase tracking-tight">Salud</h2>
                 <Input
                   label="Alergias"
                   value={formData.alergias}
@@ -463,9 +473,10 @@ export default function RegisterPage() {
                   }
                   labelAction={
                     <button
+                      type="button"
                       onClick={() => toggleHealthField("alergias", "Ninguna")}
                       className={cn(
-                        "text-[10px] font-bold uppercase px-3 py-1 rounded-full",
+                        "text-[10px] font-bold uppercase px-3 py-1 rounded-full cursor-pointer",
                         formData.alergias === "Ninguna"
                           ? "bg-primary text-white"
                           : "bg-primary/10 text-primary",
@@ -483,11 +494,12 @@ export default function RegisterPage() {
                   }
                   labelAction={
                     <button
+                      type="button"
                       onClick={() =>
                         toggleHealthField("padecimiento", "Ninguna")
                       }
                       className={cn(
-                        "text-[10px] font-bold uppercase px-3 py-1 rounded-full",
+                        "text-[10px] font-bold uppercase px-3 py-1 rounded-full cursor-pointer",
                         formData.padecimiento === "Ninguna"
                           ? "bg-primary text-white"
                           : "bg-primary/10 text-primary",
@@ -497,16 +509,30 @@ export default function RegisterPage() {
                     </button>
                   }
                 />
+                <Input
+                  label="Medicamento que tomas"
+                  value={formData.medicamento}
+                  onChange={(e) =>
+                    setFormData({ ...formData, medicamento: e.target.value })
+                  }
+                />
+                <Input
+                  label="Dosis y Frecuencia"
+                  value={formData.dosisFrecuencia}
+                  onChange={(e) =>
+                    setFormData({ ...formData, dosisFrecuencia: e.target.value })
+                  }
+                />
                 <div className="flex gap-3">
                   <Button
                     variant="outline"
-                    className="flex-1 h-14 rounded-2xl"
+                    className="flex-1 h-14"
                     onClick={handleBack}
                   >
                     Atrás
                   </Button>
                   <Button
-                    className="flex-[2] h-14 rounded-2xl font-bold"
+                    className="flex-[2] h-14 font-bold"
                     disabled={!isStep4Valid}
                     onClick={handleNext}
                   >
@@ -519,9 +545,92 @@ export default function RegisterPage() {
             {step === 5 && (
               <motion.div
                 key="step5"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}
+                className="space-y-6 bg-white p-5 sm:p-8 rounded-[2rem] shadow-xl border border-gray-100 text-center"
+              >
+                <div className="space-y-4">
+                  <div className="inline-flex items-center justify-center p-4 bg-primary/10 rounded-full mb-2">
+                    <User size={32} className="text-primary" />
+                  </div>
+                  <h2 className="text-xl font-black text-secondary uppercase tracking-tighter">
+                    ¡Queremos <span className="text-primary">Conocerte</span>!
+                  </h2>
+                  <p className="text-sm text-gray-500 font-medium">
+                    Sube una foto tuya para completar tu perfil y tu gafete digital.
+                  </p>
+                  
+                  <div className="relative group">
+                    {formData.fotoPerfil ? (
+                      <div className="relative w-48 h-48 mx-auto rounded-full overflow-hidden border-4 border-primary/20 shadow-xl">
+                        {profilePreviewUrl ? (
+                          <img
+                            src={profilePreviewUrl}
+                            className="w-full h-full object-cover"
+                            alt="Perfil"
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center h-full bg-gray-50">
+                            <FileText className="h-10 w-10 text-primary" />
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormData({ ...formData, fotoPerfil: null });
+                            setProfilePreviewUrl(null);
+                          }}
+                          className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                        >
+                          <X className="h-8 w-8 text-white" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center w-48 h-48 mx-auto border-4 border-dashed border-gray-100 rounded-full cursor-pointer hover:bg-gray-50 transition-all hover:border-primary/30">
+                        <Camera className="h-10 w-10 text-primary mb-2" />
+                        <span className="text-[10px] font-black text-secondary/40 uppercase tracking-widest px-4 leading-tight">
+                          Tomar Foto o Subir
+                        </span>
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/*"
+                          onChange={(e) => handleFileChange(e, "fotoPerfil")}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-14"
+                    onClick={handleBack}
+                  >
+                    Atrás
+                  </Button>
+                  <Button
+                    className="flex-[2] h-14 font-bold shadow-lg"
+                    disabled={!isStep5Valid}
+                    onClick={handleNext}
+                  >
+                    Siguiente
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+
+            {step === 6 && (
+              <motion.div
+                key="step6"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}
                 className="space-y-6 bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100"
               >
-                <h2 className="text-lg font-bold text-secondary">
+                <h2 className="text-lg font-bold text-secondary uppercase tracking-tight">
                   Finalizar Registro
                 </h2>
                 <Select
@@ -550,42 +659,43 @@ export default function RegisterPage() {
                 />
                 <div className="flex flex-col gap-3">
                   <Button
-                    className="h-14 rounded-2xl font-bold shadow-lg"
-                    disabled={!isStep5Valid}
+                    className="h-14 font-bold shadow-lg"
+                    disabled={!isStep6Valid}
                     onClick={handleNext}
                   >
                     Ir al pago
                   </Button>
                   <Button
                     variant="outline"
-                    className="h-12 rounded-2xl font-bold text-gray-500 border-gray-200"
+                    className="h-12 font-bold text-gray-500 border-gray-200"
                     onClick={handleBack}
                   >
-                    Revisar mis datos
+                    Atrás
                   </Button>
                 </div>
               </motion.div>
             )}
 
-            {step === 6 && (
+            {step === 7 && (
               <motion.div
-                key="step6"
+                key="step7"
                 initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.98 }}
                 className="space-y-6 bg-white p-5 sm:p-8 rounded-[2rem] shadow-xl border border-gray-100"
               >
                 <div className="space-y-6">
-                  <h2 className="text-lg font-bold text-secondary">
+                  <h2 className="text-lg font-bold text-secondary uppercase tracking-tight">
                     Método de Pago
                   </h2>
                   <div className="grid grid-cols-1 gap-3">
                     <button
+                      type="button"
                       onClick={() =>
                         setFormData({ ...formData, tipoPago: "completo" })
                       }
                       className={cn(
-                        "flex items-center gap-4 p-4 rounded-2xl border-2 transition-all",
+                        "flex items-center gap-4 p-4 rounded-2xl border-2 transition-all cursor-pointer",
                         formData.tipoPago === "completo"
                           ? "border-primary bg-primary/5"
                           : "border-gray-100",
@@ -609,11 +719,12 @@ export default function RegisterPage() {
                       </div>
                     </button>
                     <button
+                      type="button"
                       onClick={() =>
                         setFormData({ ...formData, tipoPago: "inscripcion" })
                       }
                       className={cn(
-                        "flex items-center gap-4 p-4 rounded-2xl border-2 transition-all",
+                        "flex items-center gap-4 p-4 rounded-2xl border-2 transition-all cursor-pointer",
                         formData.tipoPago === "inscripcion"
                           ? "border-primary bg-primary/5"
                           : "border-gray-100",
@@ -644,12 +755,16 @@ export default function RegisterPage() {
                       { id: "efectivo", icon: Banknote },
                     ].map((m) => (
                       <button
+                        type="button"
                         key={m.id}
                         onClick={() =>
-                          setFormData({ ...formData, metodoPago: m.id as any })
+                          setFormData({
+                            ...formData,
+                            metodoPago: m.id as any,
+                          })
                         }
                         className={cn(
-                          "flex flex-col items-center p-3 rounded-2xl border-2 transition-all gap-1",
+                          "flex flex-col items-center p-3 rounded-2xl border-2 transition-all gap-1 cursor-pointer",
                           formData.metodoPago === m.id
                             ? "border-primary bg-primary/5"
                             : "border-gray-100",
@@ -672,8 +787,8 @@ export default function RegisterPage() {
                 </div>
                 <div className="flex flex-col gap-3">
                   <Button
-                    className="h-14 rounded-2xl font-bold"
-                    disabled={!isStep6Valid}
+                    className="h-14 font-bold"
+                    disabled={!isStep7Valid}
                     onClick={handleNext}
                   >
                     Continuar
@@ -689,12 +804,15 @@ export default function RegisterPage() {
               </motion.div>
             )}
 
-            {step === 7 && (
+            {step === 8 && (
               <motion.div
-                key="step7"
+                key="step8"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}
                 className="space-y-6 bg-white p-5 sm:p-8 rounded-[2rem] shadow-xl border border-gray-100"
               >
-                <h2 className="text-lg font-bold text-secondary">
+                <h2 className="text-lg font-bold text-secondary uppercase tracking-tight">
                   Detalles del Pago
                 </h2>
 
@@ -754,15 +872,15 @@ export default function RegisterPage() {
                   <div className="space-y-4">
                     <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl flex items-start gap-3 text-left">
                       <Clock className="h-5 w-5 text-blue-600" />
-                      <p className="text-xs font-bold text-blue-700 uppercase tracking-widest">
+                      <p className="text-xs font-bold text-blue-700 uppercase tracking-widest leading-tight">
                         {formData.metodoPago === "transferencia"
                           ? "3 horas para pagar"
                           : "24 horas para depositar"}
                       </p>
                     </div>
-                    <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-200 rounded-3xl cursor-pointer">
+                    <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-200 rounded-3xl cursor-pointer hover:bg-gray-50 transition-all">
                       <Camera className="h-8 w-8 text-primary mb-2" />
-                      <span className="text-[10px] font-bold text-gray-400 uppercase">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase text-center px-4 leading-tight">
                         {formData.comprobantePago
                           ? formData.comprobantePago.name
                           : "Subir Comprobante"}
@@ -771,7 +889,9 @@ export default function RegisterPage() {
                         type="file"
                         className="hidden"
                         accept="image/*,application/pdf"
-                        onChange={(e) => handleFileChange(e, "comprobantePago")}
+                        onChange={(e) =>
+                          handleFileChange(e, "comprobantePago")
+                        }
                       />
                     </label>
                   </div>
@@ -780,8 +900,8 @@ export default function RegisterPage() {
                 <div className="flex flex-col gap-3 pt-2">
                   {!paymentStatus && (
                     <Button
-                      className="h-16 rounded-2xl font-black text-lg shadow-lg"
-                      disabled={!isStep7Valid || isProcessing}
+                      className="h-16 font-black text-lg shadow-lg"
+                      disabled={!isStep8Valid || isProcessing}
                       onClick={handleFinalAction}
                     >
                       {isProcessing ? (
@@ -808,9 +928,9 @@ export default function RegisterPage() {
               </motion.div>
             )}
 
-            {step === 8 && (
+            {step === 9 && (
               <motion.div
-                key="step8"
+                key="step9"
                 initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.98 }}
@@ -819,7 +939,7 @@ export default function RegisterPage() {
                 <div className="inline-flex items-center justify-center p-4 bg-primary/10 rounded-full mb-2">
                   <ShieldCheck className="h-12 w-12 text-primary" />
                 </div>
-                <h2 className="text-2xl font-black text-secondary">
+                <h2 className="text-2xl font-black text-secondary uppercase tracking-tighter">
                   ¡Registro Completado!
                 </h2>
 
@@ -838,13 +958,13 @@ export default function RegisterPage() {
                   </div>
                 )}
 
-                <p className="text-sm text-gray-500 leading-relaxed">
+                <p className="text-sm text-gray-500 leading-relaxed font-medium">
                   Hemos enviado los detalles de tu registro y acceso a tu
                   teléfono <strong>{formData.telefono}</strong> vía SMS.
                 </p>
                 <Button
-                  className="h-16 w-full rounded-2xl font-black text-lg shadow-xl mt-4 uppercase tracking-widest"
-                  onClick={() => (window.location.href = "/")}
+                  className="h-16 w-full font-black text-lg shadow-xl mt-4 uppercase tracking-widest"
+                  onClick={() => router.push("/dashboard")}
                 >
                   Ir a mi cuenta
                 </Button>
@@ -855,10 +975,13 @@ export default function RegisterPage() {
 
         {/* Dots */}
         <div className="flex justify-center gap-3 py-4">
-          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
             <div
               key={i}
-              className={`h-2 rounded-full transition-all duration-500 ${step === i ? "w-10 bg-primary shadow-sm shadow-primary/30" : "w-2 bg-gray-300"}`}
+              className={cn(
+                "h-2 rounded-full transition-all duration-500",
+                step === i ? "w-10 bg-primary shadow-sm shadow-primary/30" : "w-2 bg-gray-300"
+              )}
             />
           ))}
         </div>
@@ -866,8 +989,8 @@ export default function RegisterPage() {
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
         <ModalHeader onClose={() => setIsModalOpen(false)}>
-          <ModalTitle>Contacto de Emergencia</ModalTitle>
-          <ModalDescription>
+          <ModalTitle className="text-xl font-black text-secondary uppercase tracking-tight">Contacto de Emergencia</ModalTitle>
+          <ModalDescription className="text-xs font-bold uppercase tracking-widest mt-1">
             ¿A quién llamamos en caso de emergencia?
           </ModalDescription>
         </ModalHeader>
@@ -895,7 +1018,7 @@ export default function RegisterPage() {
           >
             Cancelar
           </Button>
-          <Button className="flex-1" onClick={saveContacto}>
+          <Button className="flex-1 font-bold" onClick={saveContacto}>
             Guardar
           </Button>
         </ModalFooter>

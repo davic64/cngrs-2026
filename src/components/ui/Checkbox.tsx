@@ -13,7 +13,7 @@ const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
     const checkboxId = id || generatedId;
 
     return (
-      <div className="flex items-start gap-3 group cursor-pointer">
+      <div className="flex items-start gap-3 group">
         <div className="relative flex items-center">
           <input
             type="checkbox"
@@ -25,22 +25,35 @@ const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
             {...props}
           />
           <div
+            role="checkbox"
+            aria-checked={checked}
+            tabIndex={0}
             className={cn(
-              "h-5 w-5 rounded border-2 transition-all duration-200 flex items-center justify-center",
+              "h-5 w-5 rounded-md border-2 transition-all duration-200 flex items-center justify-center cursor-pointer",
               checked
                 ? "bg-primary border-primary shadow-sm shadow-primary/20"
-                : "border-gray-300 group-hover:border-primary bg-white"
+                : "border-gray-300 group-hover:border-primary bg-white",
             )}
             onClick={() => {
-                // Trigger change if used purely as a div-based toggle
-                const event = { target: { checked: !checked } } as React.ChangeEvent<HTMLInputElement>;
+              const event = {
+                target: { checked: !checked },
+              } as React.ChangeEvent<HTMLInputElement>;
+              onChange?.(event);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                const event = {
+                  target: { checked: !checked },
+                } as React.ChangeEvent<HTMLInputElement>;
                 onChange?.(event);
+              }
             }}
           >
             <Check
               className={cn(
                 "h-3.5 w-3.5 text-white stroke-[4] transition-transform duration-200 scale-0",
-                checked && "scale-100"
+                checked && "scale-100",
               )}
             />
           </div>
@@ -55,7 +68,7 @@ const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
         )}
       </div>
     );
-  }
+  },
 );
 Checkbox.displayName = "Checkbox";
 
