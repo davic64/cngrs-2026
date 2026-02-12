@@ -1,1 +1,15 @@
 @import "tailwindcss";
+
+html {
+  scrollbar-gutter: stable;
+}
+
+:root {
+  --color-jidi-primary: #38b2b2;
+  --color-jidi-blue: #151b2e;
+}
+
+@theme {
+  --color-primary: var(--color-jidi-primary);
+  --color-secondary: var(--color-jidi-blue);
+}

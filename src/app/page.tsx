@@ -1,8 +1,42 @@
+import { Button } from "@/components/ui/Button";
+import Link from "next/link";
+
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <h1 className="text-4xl font-bold">Welcome to CNGRS 2026!</h1>
-      <p className="mt-4 text-lg">Your go-to platform for all things CNGRS.</p>
+    <main className="relative min-h-screen w-full flex flex-col items-center justify-center overflow-hidden bg-secondary">
+      {/* Efecto de degradado sutil en el fondo */}
+      <div className="absolute inset-0 bg-linear-to-b from-black/20 to-black/40" />
+
+      {/* Main Content */}
+      <div className="relative z-10 w-full max-w-sm px-6 text-center sm:max-w-xl">
+        <h1 className="mb-12 text-5xl font-extrabold tracking-tighter text-white drop-shadow-2xl sm:text-7xl">
+          Bienvenid@ a <span className="text-primary">CNGRS26</span>
+        </h1>
+
+        <div className="flex flex-col gap-4 sm:flex-row sm:justify-center">
+          <Link href="/auth/register" className="w-full sm:w-48">
+            <Button className="h-14 w-full text-base font-bold uppercase tracking-widest sm:h-12">
+              Registrarse
+            </Button>
+          </Link>
+
+          <Link href="/auth/login" className="w-full sm:w-48">
+            <Button
+              variant="outline"
+              className="h-14 w-full border-white text-base font-bold uppercase tracking-widest text-white hover:bg-white hover:text-secondary sm:h-12 transition-all duration-300"
+            >
+              Iniciar Sesión
+            </Button>
+          </Link>
+        </div>
+      </div>
+
+      {/* Footer Branding */}
+      <div className="absolute bottom-10 z-10 text-center">
+        <p className="text-[10px] md:text-sm font-medium tracking-[0.3em] text-white/40 uppercase">
+          Yo Soy • Congreso Internacional • JIDI
+        </p>
+      </div>
     </main>
   );
 }
