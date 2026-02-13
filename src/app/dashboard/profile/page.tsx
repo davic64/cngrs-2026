@@ -1,6 +1,6 @@
+import { redirect } from "next/navigation";
 import { getSessionUser } from "@/app/actions/auth";
 import { ProfileClient } from "@/components/dashboard/ProfileClient";
-import { redirect } from "next/navigation";
 
 export default async function ProfilePage() {
   const user = await getSessionUser();

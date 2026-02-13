@@ -136,7 +136,9 @@ export default function LoginPage() {
               className="w-full h-11 shadow-md shadow-primary/10 uppercase tracking-widest"
               disabled={!telefono || !password || isLoading}
             >
-              {isLoading ? "Entrando..." : (
+              {isLoading ? (
+                "Entrando..."
+              ) : (
                 <>
                   Entrar
                   <ArrowRight className="ml-2 h-4 w-4" />

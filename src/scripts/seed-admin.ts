@@ -1,11 +1,11 @@
-import { neon } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-http';
-import { users } from '../db/schema';
-import { eq } from 'drizzle-orm';
-import bcrypt from 'bcryptjs';
-import * as dotenv from 'dotenv';
+import { neon } from "@neondatabase/serverless";
+import bcrypt from "bcryptjs";
+import * as dotenv from "dotenv";
+import { eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/neon-http";
+import { users } from "../db/schema";
 
-dotenv.config({ path: '.env' });
+dotenv.config({ path: ".env" });
 
 async function seedAdmin() {
   if (!process.env.DATABASE_URL) {
@@ -24,11 +24,16 @@ async function seedAdmin() {
 
   try {
     // Verificar si ya existe
-    const [existingUser] = await db.select().from(users).where(eq(users.phone, adminPhone)).limit(1);
+    const [existingUser] = await db
+      .select()
+      .from(users)
+      .where(eq(users.phone, adminPhone))
+      .limit(1);
 
     if (existingUser) {
       console.log("⚠️ El usuario ya existe. Actualizando contraseña...");
-      await db.update(users)
+      await db
+        .update(users)
         .set({ password: hashedPassword })
         .where(eq(users.phone, adminPhone));
       console.log("✅ Contraseña actualizada correctamente.");
@@ -45,7 +50,7 @@ async function seedAdmin() {
         country: "México",
         state: "Jalisco",
         locality: "Guadalajara",
-        registrationStatus: "completado"
+        registrationStatus: "completado",
       });
       console.log("✅ Cuenta Admin creada con éxito.");
     }

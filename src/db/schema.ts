@@ -1,10 +1,32 @@
-import { pgTable, serial, text, integer, boolean, timestamp, pgEnum, uuid } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+import {
+  boolean,
+  integer,
+  pgEnum,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 // Enums
-export const statusEnum = pgEnum("registration_status", ["pendiente", "parcial", "completado"]);
-export const paymentMethodEnum = pgEnum("payment_method", ["tarjeta", "transferencia", "efectivo"]);
-export const paymentStatusEnum = pgEnum("payment_status", ["pendiente", "revision", "completado", "rechazado"]);
+export const statusEnum = pgEnum("registration_status", [
+  "pendiente",
+  "parcial",
+  "completado",
+]);
+export const paymentMethodEnum = pgEnum("payment_method", [
+  "tarjeta",
+  "transferencia",
+  "efectivo",
+]);
+export const paymentStatusEnum = pgEnum("payment_status", [
+  "pendiente",
+  "revision",
+  "completado",
+  "rechazado",
+]);
 export const genderEnum = pgEnum("gender", ["M", "F", "Otro"]);
 
 // Tables
@@ -22,7 +44,9 @@ export const users = pgTable("users", {
   country: text("country").notNull(),
   state: text("state").notNull(),
   locality: text("locality").notNull(),
-  registrationStatus: statusEnum("registration_status").default("pendiente").notNull(),
+  registrationStatus: statusEnum("registration_status")
+    .default("pendiente")
+    .notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -40,14 +64,20 @@ export const usersRelations = relations(users, ({ one, many }) => ({
 
 export const emergencyContacts = pgTable("emergency_contacts", {
   id: serial("id").primaryKey(),
-  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull().unique(),
+  userId: uuid("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull()
+    .unique(),
   name: text("name").notNull(),
   phone: text("phone").notNull(),
 });
 
 export const healthInfo = pgTable("health_info", {
   id: serial("id").primaryKey(),
-  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull().unique(),
+  userId: uuid("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull()
+    .unique(),
   allergies: text("allergies").default("Ninguna"),
   conditions: text("conditions").default("Ninguna"),
   medications: text("medications").default("Ninguno"),
@@ -56,9 +86,11 @@ export const healthInfo = pgTable("health_info", {
 
 export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
-  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  userId: uuid("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
   amount: integer("amount").notNull(),
-  type: text("type").notNull(), 
+  type: text("type").notNull(),
   method: paymentMethodEnum("method").notNull(),
   proofUrl: text("proof_url"),
   status: paymentStatusEnum("payment_status").default("pendiente").notNull(),
@@ -76,10 +108,10 @@ export const events = pgTable("events", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   speaker: text("speaker").notNull(),
-  time: text("time").notNull(), 
+  time: text("time").notNull(),
   location: text("location").notNull(),
-  category: text("category").notNull(), 
-  dayId: text("day_id").notNull(), 
+  category: text("category").notNull(),
+  dayId: text("day_id").notNull(),
 });
 
 export const notifications = pgTable("notifications", {
@@ -87,7 +119,7 @@ export const notifications = pgTable("notifications", {
   title: text("title").notNull(),
   message: text("message").notNull(),
   fullContent: text("full_content").notNull(),
-  type: text("type").notNull(), 
+  type: text("type").notNull(),
   isPinned: boolean("is_pinned").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -99,4 +131,21 @@ export const venues = pgTable("venues", {
   description: text("description").notNull(),
   mapsUrl: text("maps_url").notNull(),
   websiteUrl: text("website_url"),
+});
+
+export const settings = pgTable("settings", {
+  id: serial("id").primaryKey(),
+  fullPaymentPrice: integer("full_payment_price").default(1500).notNull(),
+  registrationFeePrice: integer("registration_fee_price")
+    .default(500)
+    .notNull(),
+  stripePercentage: text("stripe_percentage").default("3.6").notNull(),
+  stripeFixedFee: integer("stripe_fixed_fee").default(3).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const localities = pgTable("localities", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  country: text("country").notNull(),
 });
