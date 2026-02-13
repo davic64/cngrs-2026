@@ -6,6 +6,8 @@ import {
 } from "@/app/actions/admin";
 import { AdminDashboardClient } from "@/components/admin/AdminDashboardClient";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminDashboardPage() {
   const stats = await getAdminStats();
   const pendingPayments = await getPendingPayments();

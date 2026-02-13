@@ -1,5 +1,6 @@
 "use server";
 
+import { db } from "@/db";
 import { asc, count, desc, eq, sum } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {

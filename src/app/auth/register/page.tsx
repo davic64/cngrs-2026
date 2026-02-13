@@ -22,6 +22,7 @@ import * as React from "react";
 import { getLocalities, getSettings } from "@/app/actions/admin";
 import { registerUser } from "@/app/actions/auth";
 import { verifyDocumentAge } from "@/app/actions/ocr";
+import { createCheckoutSession } from "@/app/actions/stripe";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Input } from "@/components/ui/Input";
@@ -67,83 +68,164 @@ const _LOCALIDADES = [
 ];
 
 const ESTADOS_POR_PAIS: Record<string, { value: string; label: string }[]> = {
-  "México": [
-    { value: "Aguascalientes", label: "Aguascalientes" }, { value: "Baja California", label: "Baja California" },
-    { value: "Baja California Sur", label: "Baja California Sur" }, { value: "Campeche", label: "Campeche" },
-    { value: "Chiapas", label: "Chiapas" }, { value: "Chihuahua", label: "Chihuahua" },
-    { value: "Ciudad de México", label: "Ciudad de México" }, { value: "Coahuila", label: "Coahuila" },
-    { value: "Colima", label: "Colima" }, { value: "Durango", label: "Durango" },
-    { value: "Estado de México", label: "Estado de México" }, { value: "Guanajuato", label: "Guanajuato" },
-    { value: "Guerrero", label: "Guerrero" }, { value: "Hidalgo", label: "Hidalgo" },
-    { value: "Jalisco", label: "Jalisco" }, { value: "Michoacán", label: "Michoacán" },
-    { value: "Morelos", label: "Morelos" }, { value: "Nayarit", label: "Nayarit" },
-    { value: "Nuevo León", label: "Nuevo León" }, { value: "Oaxaca", label: "Oaxaca" },
-    { value: "Puebla", label: "Puebla" }, { value: "Querétaro", label: "Querétaro" },
-    { value: "Quintana Roo", label: "Quintana Roo" }, { value: "San Luis Potosí", label: "San Luis Potosí" },
-    { value: "Sinaloa", label: "Sinaloa" }, { value: "Sonora", label: "Sonora" },
-    { value: "Tabasco", label: "Tabasco" }, { value: "Tamaulipas", label: "Tamaulipas" },
-    { value: "Tlaxcala", label: "Tlaxcala" }, { value: "Veracruz", label: "Veracruz" },
-    { value: "Yucatán", label: "Yucatán" }, { value: "Zacatecas", label: "Zacatecas" }
+  México: [
+    { value: "Aguascalientes", label: "Aguascalientes" },
+    { value: "Baja California", label: "Baja California" },
+    { value: "Baja California Sur", label: "Baja California Sur" },
+    { value: "Campeche", label: "Campeche" },
+    { value: "Chiapas", label: "Chiapas" },
+    { value: "Chihuahua", label: "Chihuahua" },
+    { value: "Ciudad de México", label: "Ciudad de México" },
+    { value: "Coahuila", label: "Coahuila" },
+    { value: "Colima", label: "Colima" },
+    { value: "Durango", label: "Durango" },
+    { value: "Estado de México", label: "Estado de México" },
+    { value: "Guanajuato", label: "Guanajuato" },
+    { value: "Guerrero", label: "Guerrero" },
+    { value: "Hidalgo", label: "Hidalgo" },
+    { value: "Jalisco", label: "Jalisco" },
+    { value: "Michoacán", label: "Michoacán" },
+    { value: "Morelos", label: "Morelos" },
+    { value: "Nayarit", label: "Nayarit" },
+    { value: "Nuevo León", label: "Nuevo León" },
+    { value: "Oaxaca", label: "Oaxaca" },
+    { value: "Puebla", label: "Puebla" },
+    { value: "Querétaro", label: "Querétaro" },
+    { value: "Quintana Roo", label: "Quintana Roo" },
+    { value: "San Luis Potosí", label: "San Luis Potosí" },
+    { value: "Sinaloa", label: "Sinaloa" },
+    { value: "Sonora", label: "Sonora" },
+    { value: "Tabasco", label: "Tabasco" },
+    { value: "Tamaulipas", label: "Tamaulipas" },
+    { value: "Tlaxcala", label: "Tlaxcala" },
+    { value: "Veracruz", label: "Veracruz" },
+    { value: "Yucatán", label: "Yucatán" },
+    { value: "Zacatecas", label: "Zacatecas" },
   ],
   "Estados Unidos": [
-    { value: "Alabama", label: "Alabama" }, { value: "Alaska", label: "Alaska" }, { value: "Arizona", label: "Arizona" },
-    { value: "Arkansas", label: "Arkansas" }, { value: "California", label: "California" }, { value: "Colorado", label: "Colorado" },
-    { value: "Connecticut", label: "Connecticut" }, { value: "Delaware", label: "Delaware" }, { value: "Florida", label: "Florida" },
-    { value: "Georgia", label: "Georgia" }, { value: "Hawaii", label: "Hawaii" }, { value: "Idaho", label: "Idaho" },
-    { value: "Illinois", label: "Illinois" }, { value: "Indiana", label: "Indiana" }, { value: "Iowa", label: "Iowa" },
-    { value: "Kansas", label: "Kansas" }, { value: "Kentucky", label: "Kentucky" }, { value: "Louisiana", label: "Louisiana" },
-    { value: "Maine", label: "Maine" }, { value: "Maryland", label: "Maryland" }, { value: "Massachusetts", label: "Massachusetts" },
-    { value: "Michigan", label: "Michigan" }, { value: "Minnesota", label: "Minnesota" }, { value: "Mississippi", label: "Mississippi" },
-    { value: "Missouri", label: "Missouri" }, { value: "Montana", label: "Montana" }, { value: "Nebraska", label: "Nebraska" },
-    { value: "Nevada", label: "Nevada" }, { value: "New Hampshire", label: "New Hampshire" }, { value: "New Jersey", label: "New Jersey" },
-    { value: "New Mexico", label: "New Mexico" }, { value: "New York", label: "New York" }, { value: "North Carolina", label: "North Carolina" },
-    { value: "North Dakota", label: "North Dakota" }, { value: "Ohio", label: "Ohio" }, { value: "Oklahoma", label: "Oklahoma" },
-    { value: "Oregon", label: "Oregon" }, { value: "Pennsylvania", label: "Pennsylvania" }, { value: "Rhode Island", label: "Rhode Island" },
-    { value: "South Carolina", label: "South Carolina" }, { value: "South Dakota", label: "South Dakota" }, { value: "Tennessee", label: "Tennessee" },
-    { value: "Texas", label: "Texas" }, { value: "Utah", label: "Utah" }, { value: "Vermont", label: "Vermont" },
-    { value: "Virginia", label: "Virginia" }, { value: "Washington", label: "Washington" }, { value: "West Virginia", label: "West Virginia" },
-    { value: "Wisconsin", label: "Wisconsin" }, { value: "Wyoming" , label: "Wyoming" }
+    { value: "Alabama", label: "Alabama" },
+    { value: "Alaska", label: "Alaska" },
+    { value: "Arizona", label: "Arizona" },
+    { value: "Arkansas", label: "Arkansas" },
+    { value: "California", label: "California" },
+    { value: "Colorado", label: "Colorado" },
+    { value: "Connecticut", label: "Connecticut" },
+    { value: "Delaware", label: "Delaware" },
+    { value: "Florida", label: "Florida" },
+    { value: "Georgia", label: "Georgia" },
+    { value: "Hawaii", label: "Hawaii" },
+    { value: "Idaho", label: "Idaho" },
+    { value: "Illinois", label: "Illinois" },
+    { value: "Indiana", label: "Indiana" },
+    { value: "Iowa", label: "Iowa" },
+    { value: "Kansas", label: "Kansas" },
+    { value: "Kentucky", label: "Kentucky" },
+    { value: "Louisiana", label: "Louisiana" },
+    { value: "Maine", label: "Maine" },
+    { value: "Maryland", label: "Maryland" },
+    { value: "Massachusetts", label: "Massachusetts" },
+    { value: "Michigan", label: "Michigan" },
+    { value: "Minnesota", label: "Minnesota" },
+    { value: "Mississippi", label: "Mississippi" },
+    { value: "Missouri", label: "Missouri" },
+    { value: "Montana", label: "Montana" },
+    { value: "Nebraska", label: "Nebraska" },
+    { value: "Nevada", label: "Nevada" },
+    { value: "New Hampshire", label: "New Hampshire" },
+    { value: "New Jersey", label: "New Jersey" },
+    { value: "New Mexico", label: "New Mexico" },
+    { value: "New York", label: "New York" },
+    { value: "North Carolina", label: "North Carolina" },
+    { value: "North Dakota", label: "North Dakota" },
+    { value: "Ohio", label: "Ohio" },
+    { value: "Oklahoma", label: "Oklahoma" },
+    { value: "Oregon", label: "Oregon" },
+    { value: "Pennsylvania", label: "Pennsylvania" },
+    { value: "Rhode Island", label: "Rhode Island" },
+    { value: "South Carolina", label: "South Carolina" },
+    { value: "South Dakota", label: "South Dakota" },
+    { value: "Tennessee", label: "Tennessee" },
+    { value: "Texas", label: "Texas" },
+    { value: "Utah", label: "Utah" },
+    { value: "Vermont", label: "Vermont" },
+    { value: "Virginia", label: "Virginia" },
+    { value: "Washington", label: "Washington" },
+    { value: "West Virginia", label: "West Virginia" },
+    { value: "Wisconsin", label: "Wisconsin" },
+    { value: "Wyoming", label: "Wyoming" },
   ],
-  "Canadá": [
-    { value: "Alberta", label: "Alberta" }, { value: "British Columbia", label: "British Columbia" },
-    { value: "Manitoba", label: "Manitoba" }, { value: "New Brunswick", label: "New Brunswick" },
-    { value: "Newfoundland and Labrador", label: "Newfoundland and Labrador" }, { value: "Nova Scotia", label: "Nova Scotia" },
-    { value: "Ontario", label: "Ontario" }, { value: "Prince Edward Island", label: "Prince Edward Island" },
-    { value: "Quebec", label: "Quebec" }, { value: "Saskatchewan", label: "Saskatchewan" }
+  Canadá: [
+    { value: "Alberta", label: "Alberta" },
+    { value: "British Columbia", label: "British Columbia" },
+    { value: "Manitoba", label: "Manitoba" },
+    { value: "New Brunswick", label: "New Brunswick" },
+    { value: "Newfoundland and Labrador", label: "Newfoundland and Labrador" },
+    { value: "Nova Scotia", label: "Nova Scotia" },
+    { value: "Ontario", label: "Ontario" },
+    { value: "Prince Edward Island", label: "Prince Edward Island" },
+    { value: "Quebec", label: "Quebec" },
+    { value: "Saskatchewan", label: "Saskatchewan" },
   ],
   "El Salvador": [
-    { value: "Ahuachapán", label: "Ahuachapán" }, { value: "Cabañas", label: "Cabañas" },
-    { value: "Chalatenango", label: "Chalatenango" }, { value: "Cuscatlán", label: "Cabañas" },
-    { value: "La Libertad", label: "La Libertad" }, { value: "La Paz", label: "La Paz" },
-    { value: "La Unión", label: "La Unión" }, { value: "Morazán", label: "Morazán" },
-    { value: "San Miguel", label: "San Miguel" }, { value: "San Salvador", label: "San Salvador" },
-    { value: "San Vicente", label: "San Vicente" }, { value: "Santa Ana", label: "Santa Ana" },
-    { value: "Sonsonate", label: "Sonsonate" }, { value: "Usulután", label: "Usulután" }
+    { value: "Ahuachapán", label: "Ahuachapán" },
+    { value: "Cabañas", label: "Cabañas" },
+    { value: "Chalatenango", label: "Chalatenango" },
+    { value: "Cuscatlán", label: "Cabañas" },
+    { value: "La Libertad", label: "La Libertad" },
+    { value: "La Paz", label: "La Paz" },
+    { value: "La Unión", label: "La Unión" },
+    { value: "Morazán", label: "Morazán" },
+    { value: "San Miguel", label: "San Miguel" },
+    { value: "San Salvador", label: "San Salvador" },
+    { value: "San Vicente", label: "San Vicente" },
+    { value: "Santa Ana", label: "Santa Ana" },
+    { value: "Sonsonate", label: "Sonsonate" },
+    { value: "Usulután", label: "Usulután" },
   ],
-  "Guatemala": [
-    { value: "Alta Verapaz", label: "Alta Verapaz" }, { value: "Baja Verapaz", label: "Baja Verapaz" },
-    { value: "Chimaltenango", label: "Chimaltenango" }, { value: "Chiquimula", label: "Chiquimula" },
-    { value: "El Progreso", label: "El Progreso" }, { value: "Escuintla", label: "Escuintla" },
-    { value: "Guatemala", label: "Guatemala" }, { value: "Huehuetenango", label: "Huehuetenango" },
-    { value: "Izabal", label: "Izabal" }, { value: "Jalapa", label: "Jalapa" },
-    { value: "Jutiapa", label: "Jutiapa" }, { value: "Petén", label: "Petén" },
-    { value: "Quetzaltenango", label: "Quetzaltenango" }, { value: "Quiché", label: "Quiché" },
-    { value: "Retalhuleu", label: "Retalhuleu" }, { value: "Sacatepéquez", label: "Sacatepéquez" },
-    { value: "San Marcos", label: "San Marcos" }, { value: "Santa Rosa", label: "Santa Rosa" },
-    { value: "Sololá", label: "Sololá" }, { value: "Suchitepéquez", label: "Suchitepéquez" },
-    { value: "Totonicapán", label: "Totonicapán" }, { value: "Zacapa", label: "Zacapa" }
+  Guatemala: [
+    { value: "Alta Verapaz", label: "Alta Verapaz" },
+    { value: "Baja Verapaz", label: "Baja Verapaz" },
+    { value: "Chimaltenango", label: "Chimaltenango" },
+    { value: "Chiquimula", label: "Chiquimula" },
+    { value: "El Progreso", label: "El Progreso" },
+    { value: "Escuintla", label: "Escuintla" },
+    { value: "Guatemala", label: "Guatemala" },
+    { value: "Huehuetenango", label: "Huehuetenango" },
+    { value: "Izabal", label: "Izabal" },
+    { value: "Jalapa", label: "Jalapa" },
+    { value: "Jutiapa", label: "Jutiapa" },
+    { value: "Petén", label: "Petén" },
+    { value: "Quetzaltenango", label: "Quetzaltenango" },
+    { value: "Quiché", label: "Quiché" },
+    { value: "Retalhuleu", label: "Retalhuleu" },
+    { value: "Sacatepéquez", label: "Sacatepéquez" },
+    { value: "San Marcos", label: "San Marcos" },
+    { value: "Santa Rosa", label: "Santa Rosa" },
+    { value: "Sololá", label: "Sololá" },
+    { value: "Suchitepéquez", label: "Suchitepéquez" },
+    { value: "Totonicapán", label: "Totonicapán" },
+    { value: "Zacapa", label: "Zacapa" },
   ],
-  "Honduras": [
-    { value: "Atlántida", label: "Atlántida" }, { value: "Choluteca", label: "Choluteca" },
-    { value: "Colón", label: "Colón" }, { value: "Comayagua", label: "Comayagua" },
-    { value: "Copán", label: "Copán" }, { value: "Cortés", label: "Cortés" },
-    { value: "El Paraíso", label: "El Paraíso" }, { value: "Francisco Morazán", label: "Francisco Morazán" },
-    { value: "Gracias a Dios", label: "Gracias a Dios" }, { value: "Intibucá", label: "Intibucá" },
-    { value: "Islas de la Bahía", label: "Islas de la Bahía" }, { value: "La Paz", label: "La Paz" },
-    { value: "Lempira", label: "Lempira" }, { value: "Ocotepeque", label: "Ocotepeque" },
-    { value: "Olancho", label: "Olancho" }, { value: "Santa Bárbara", label: "Santa Bárbara" },
-    { value: "Valle", label: "Valle" }, { value: "Yoro", label: "Yoro" }
-  ]
+  Honduras: [
+    { value: "Atlántida", label: "Atlántida" },
+    { value: "Choluteca", label: "Choluteca" },
+    { value: "Colón", label: "Colón" },
+    { value: "Comayagua", label: "Comayagua" },
+    { value: "Copán", label: "Copán" },
+    { value: "Cortés", label: "Cortés" },
+    { value: "El Paraíso", label: "El Paraíso" },
+    { value: "Francisco Morazán", label: "Francisco Morazán" },
+    { value: "Gracias a Dios", label: "Gracias a Dios" },
+    { value: "Intibucá", label: "Intibucá" },
+    { value: "Islas de la Bahía", label: "Islas de la Bahía" },
+    { value: "La Paz", label: "La Paz" },
+    { value: "Lempira", label: "Lempira" },
+    { value: "Ocotepeque", label: "Ocotepeque" },
+    { value: "Olancho", label: "Olancho" },
+    { value: "Santa Bárbara", label: "Santa Bárbara" },
+    { value: "Valle", label: "Valle" },
+    { value: "Yoro", label: "Yoro" },
+  ],
 };
 
 type FormData = {
@@ -176,7 +258,8 @@ export default function RegisterPage() {
   const router = useRouter();
   const [step, setStep] = React.useState(1);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
-  const [isAgeRestrictedModalOpen, setIsAgeRestrictedModalOpen] = React.useState(false);
+  const [isAgeRestrictedModalOpen, setIsAgeRestrictedModalOpen] =
+    React.useState(false);
   const [detectedAge, setDetectedAge] = React.useState<number | null>(null);
   const [isProcessing, setIsProcessing] = React.useState(false);
   const [isVerifying, setIsVerifying] = React.useState(false);
@@ -245,6 +328,11 @@ export default function RegisterPage() {
   const isEdadValida = edadInt >= 15 && edadInt <= 29;
   const needsResponsiva = edadInt >= 15 && edadInt <= 17;
 
+  const filteredStates = React.useMemo(() => {
+    const states = ESTADOS_POR_PAIS[formData.pais] || [];
+    return [...states, { value: "Otro", label: "Otro (Escribir)" }];
+  }, [formData.pais]);
+
   // Filter localities based on selected country
   const filteredLocalities = React.useMemo(() => {
     const options = dbLocalities
@@ -290,75 +378,56 @@ export default function RegisterPage() {
     setStep((prev) => prev + 1);
   };
 
-    const simulateStripePayment = async (userId: string) => {
+  const simulateStripePayment = async (userId: string) => {
+    setIsProcessing(true);
 
-      setIsProcessing(true);
+    const result = await createCheckoutSession(
+      userId,
+      formData.tipoPago as "completo" | "inscripcion",
+    );
 
-      const result = await createCheckoutSession(userId, formData.tipoPago as "completo" | "inscripcion");
+    if (result.success && result.url) {
+      window.location.href = result.url;
+    } else {
+      alert(result.error || "Error al conectar con Stripe");
 
-      
+      setIsProcessing(false);
+    }
+  };
 
-      if (result.success && result.url) {
+  const handleFinalAction = async () => {
+    setIsProcessing(true);
 
-        window.location.href = result.url;
+    // 1. Siempre guardar primero en la base de datos
 
-      } else {
+    const result = await handleSubmit(false); // No cambiar de step automáticamente
 
-        alert(result.error || "Error al conectar con Stripe");
+    if (result.success) {
+      if (formData.metodoPago === "tarjeta") {
+        // 2. Si es tarjeta, ir a Stripe
 
-        setIsProcessing(false);
-
-      }
-
-    };
-
-  
-
-    const handleFinalAction = async () => {
-
-      setIsProcessing(true);
-
-      
-
-      // 1. Siempre guardar primero en la base de datos
-
-      const result = await handleSubmit(false); // No cambiar de step automáticamente
-
-      
-
-      if (result.success) {
-
-        if (formData.metodoPago === "tarjeta") {
-
-          // 2. Si es tarjeta, ir a Stripe
-
+        if (result.userId) {
           await simulateStripePayment(result.userId);
-
         } else {
+          alert("Error: No se pudo obtener el ID del usuario.");
 
-          // 2. Si es efectivo/transf, ir al step de éxito
-
-          setStep(9);
-
+          setIsProcessing(false);
         }
-
       } else {
+        // 2. Si es efectivo/transf, ir al step de éxito
 
-        alert(result.error || "Hubo un error al procesar tu registro");
-
-        setIsProcessing(false);
-
+        setStep(9);
       }
+    } else {
+      alert(result.error || "Hubo un error al procesar tu registro");
 
-    };
+      setIsProcessing(false);
+    }
+  };
 
-  
+  const handleSubmit = async (shouldChangeStep = true) => {
+    // setIsProcessing lo maneja el que lo llama
 
-    const handleSubmit = async (shouldChangeStep = true) => {
-
-      // setIsProcessing lo maneja el que lo llama
-
-  
     const data = new FormData();
     data.append("nombre", formData.nombre);
     data.append("apellido", formData.apellido);
@@ -388,25 +457,16 @@ export default function RegisterPage() {
     if (formData.comprobantePago)
       data.append("comprobantePago", formData.comprobantePago);
 
-        const result = await registerUser(data);
+    const result = await registerUser(data);
 
-        
+    if (result.success) {
+      if (shouldChangeStep) setStep(9);
 
-        if (result.success) {
-
-          if (shouldChangeStep) setStep(9);
-
-          return { success: true, userId: result.userId };
-
-        } else {
-
-          return { success: false, error: result.error };
-
-        }
-
-      };
-
-    
+      return { success: true, userId: result.userId };
+    } else {
+      return { success: false, error: result.error };
+    }
+  };
 
   const handleBack = () => setStep((prev) => prev - 1);
 
@@ -725,26 +785,30 @@ export default function RegisterPage() {
                     setFormData({ ...formData, pais: e.target.value })
                   }
                 />
-                                <SearchableSelect 
-                                  label="Estado / Departamento"
-                                  placeholder="Busca tu estado..."
-                                  options={filteredStates}
-                                  value={formData.estado}
-                                  onChange={(val) => setFormData({ ...formData, estado: val })}
-                                />
-                                {formData.estado === "Otro" && (
-                                  <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-                                    <Input 
-                                      label="Escribe tu Estado" 
-                                      placeholder="Nombre de tu estado o provincia" 
-                                      value={formData.estado === "Otro" ? "" : formData.estado}
-                                      onChange={(e) => setFormData({ ...formData, estado: e.target.value })}
-                                    />
-                                  </motion.div>
-                                )}
-                                <SearchableSelect 
-                                  label="Localidad / Sede"
-                
+                <SearchableSelect
+                  label="Estado / Departamento"
+                  placeholder="Busca tu estado..."
+                  options={filteredStates}
+                  value={formData.estado}
+                  onChange={(val) => setFormData({ ...formData, estado: val })}
+                />
+                {formData.estado === "Otro" && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                  >
+                    <Input
+                      label="Escribe tu Estado"
+                      placeholder="Nombre de tu estado o provincia"
+                      value={formData.estado === "Otro" ? "" : formData.estado}
+                      onChange={(e) =>
+                        setFormData({ ...formData, estado: e.target.value })
+                      }
+                    />
+                  </motion.div>
+                )}
+                <SearchableSelect
+                  label="Localidad / Sede"
                   placeholder="Busca tu ciudad o sede..."
                   options={filteredLocalities}
                   value={formData.localidad}
@@ -1380,84 +1444,91 @@ export default function RegisterPage() {
         </div>
       </div>
 
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+        <ModalHeader onClose={() => setIsModalOpen(false)}>
+          <ModalTitle className="text-xl font-black text-secondary uppercase tracking-tight">
+            Contacto de Emergencia
+          </ModalTitle>
+          <ModalDescription className="text-xs font-bold uppercase tracking-widest mt-1">
+            ¿A quién llamamos en caso de emergencia?
+          </ModalDescription>
+        </ModalHeader>
 
-              <ModalHeader onClose={() => setIsModalOpen(false)}><ModalTitle className="text-xl font-black text-secondary uppercase tracking-tight">Contacto de Emergencia</ModalTitle><ModalDescription className="text-xs font-bold uppercase tracking-widest mt-1">¿A quién llamamos en caso de emergencia?</ModalDescription></ModalHeader>
+        <ModalContent className="space-y-4 pt-4">
+          <Input
+            label="Nombre"
+            value={tempContacto.nombre}
+            onChange={(e) =>
+              setTempContacto({ ...tempContacto, nombre: e.target.value })
+            }
+          />
+          <Input
+            label="Teléfono"
+            value={tempContacto.telefono}
+            onChange={(e) =>
+              setTempContacto({ ...tempContacto, telefono: e.target.value })
+            }
+          />
+        </ModalContent>
 
-              <ModalContent className="space-y-4 pt-4"><Input label="Nombre" value={tempContacto.nombre} onChange={(e) => setTempContacto({ ...tempContacto, nombre: e.target.value })} /><Input label="Teléfono" value={tempContacto.telefono} onChange={(e) => setTempContacto({ ...tempContacto, telefono: e.target.value })} /></ModalContent>
+        <ModalFooter className="flex gap-3">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => setIsModalOpen(false)}
+          >
+            Cancelar
+          </Button>
+          <Button className="flex-1 font-bold" onClick={saveContacto}>
+            Guardar
+          </Button>
+        </ModalFooter>
+      </Modal>
 
-              <ModalFooter className="flex gap-3"><Button variant="outline" className="flex-1" onClick={() => setIsModalOpen(false)}>Cancelar</Button><Button className="flex-1 font-bold" onClick={saveContacto}>Guardar</Button></ModalFooter>
+      {/* AGE RESTRICTION MODAL */}
 
-            </Modal>
+      <Modal isOpen={isAgeRestrictedModalOpen} onClose={() => {}}>
+        <ModalHeader>
+          <ModalTitle className="text-2xl font-black text-secondary uppercase tracking-tighter text-center">
+            Evento <span className="text-primary">Restringido</span>
+          </ModalTitle>
+        </ModalHeader>
 
-      
+        <ModalContent className="space-y-6 text-center">
+          <div className="h-20 w-20 bg-red-50 rounded-full flex items-center justify-center text-red-500 mx-auto shadow-inner">
+            <ShieldAlert size={48} />
+          </div>
 
-            {/* AGE RESTRICTION MODAL */}
+          <div className="space-y-2">
+            <p className="text-lg font-black text-secondary uppercase tracking-tight">
+              Límite de edad excedido
+            </p>
 
-            <Modal isOpen={isAgeRestrictedModalOpen} onClose={() => {}}>
+            <p className="text-sm text-gray-500 leading-relaxed font-medium px-4">
+              Lo sentimos, nuestro sistema ha detectado que tienes{" "}
+              <span className="font-black text-red-500">
+                {detectedAge} años
+              </span>
+              . El <span className="text-primary font-bold">CNGRS26</span> es
+              una experiencia diseñada exclusivamente para jóvenes de{" "}
+              <span className="font-bold">15 a 29 años</span>.
+            </p>
+          </div>
 
-              <ModalHeader>
+          <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 italic text-[10px] text-gray-400 uppercase tracking-widest font-bold">
+            Si crees que esto es un error, por favor contacta a soporte técnico.
+          </div>
+        </ModalContent>
 
-                <ModalTitle className="text-2xl font-black text-secondary uppercase tracking-tighter text-center">
-
-                  Evento <span className="text-primary">Restringido</span>
-
-                </ModalTitle>
-
-              </ModalHeader>
-
-              <ModalContent className="space-y-6 text-center">
-
-                <div className="h-20 w-20 bg-red-50 rounded-full flex items-center justify-center text-red-500 mx-auto shadow-inner">
-
-                   <ShieldAlert size={48} />
-
-                </div>
-
-                <div className="space-y-2">
-
-                  <p className="text-lg font-black text-secondary uppercase tracking-tight">Límite de edad excedido</p>
-
-                  <p className="text-sm text-gray-500 leading-relaxed font-medium px-4">
-
-                    Lo sentimos, nuestro sistema ha detectado que tienes <span className="font-black text-red-500">{detectedAge} años</span>. 
-
-                    El <span className="text-primary font-bold">CNGRS26</span> es una experiencia diseñada exclusivamente para jóvenes de <span className="font-bold">15 a 29 años</span>.
-
-                  </p>
-
-                </div>
-
-                <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 italic text-[10px] text-gray-400 uppercase tracking-widest font-bold">
-
-                  Si crees que esto es un error, por favor contacta a soporte técnico.
-
-                </div>
-
-              </ModalContent>
-
-              <ModalFooter>
-
-                <Button 
-
-                  className="w-full h-12 uppercase font-black text-xs tracking-widest"
-
-                  onClick={() => router.push("/")}
-
-                >
-
-                  Regresar al Inicio
-
-                </Button>
-
-              </ModalFooter>
-
-            </Modal>
-
-          </main>
-
-        );
-
-      }
-
-      
+        <ModalFooter>
+          <Button
+            className="w-full h-12 uppercase font-black text-xs tracking-widest"
+            onClick={() => router.push("/")}
+          >
+            Regresar al Inicio
+          </Button>
+        </ModalFooter>
+      </Modal>
+    </main>
+  );
+}

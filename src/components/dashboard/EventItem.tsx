@@ -7,7 +7,7 @@ interface EventItemProps {
   speaker: string;
   time: string;
   location: string;
-  index?: number;
+  _index?: number;
 }
 
 export function EventItem({

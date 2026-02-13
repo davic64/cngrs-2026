@@ -8,7 +8,9 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  Plus,
   Save,
+  Trash2,
   TrendingUp,
   Users,
 } from "lucide-react";
@@ -22,6 +24,7 @@ import {
 import { DashboardCard } from "@/components/dashboard/DashboardCard";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/utils";
 
 interface AdminDashboardClientProps {
@@ -128,9 +131,12 @@ export function AdminDashboardClient({
                           : "bg-purple-50 text-purple-500",
                   )}
                 >
-                  {React.cloneElement(stat.icon as React.ReactElement, {
-                    size: 24,
-                  })}
+                  {React.cloneElement(
+                    stat.icon as React.ReactElement<{ size: number }>,
+                    {
+                      size: 24,
+                    },
+                  )}
                 </div>
               </div>
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">

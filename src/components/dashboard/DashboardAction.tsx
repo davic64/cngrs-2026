@@ -35,7 +35,9 @@ export function DashboardAction({
           colors[color],
         )}
       >
-        {React.cloneElement(icon, { size: 24 })}
+        {React.cloneElement(icon as React.ReactElement<{ size: number }>, {
+          size: 24,
+        })}
       </div>
       <span className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] text-center">
         {label}

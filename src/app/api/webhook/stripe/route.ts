@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     event = stripe.webhooks.constructEvent(
       body,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      process.env.STRIPE_WEBHOOK_SECRET!,
     );
   } catch (err: any) {
     return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 });
@@ -33,9 +33,11 @@ export async function POST(req: Request) {
 
     if (userId) {
       // 1. Actualizar estatus del usuario
-      await db.update(users)
-        .set({ 
-          registrationStatus: paymentType === 'completo' ? 'completado' : 'parcial' 
+      await db
+        .update(users)
+        .set({
+          registrationStatus:
+            paymentType === "completo" ? "completado" : "parcial",
         })
         .where(eq(users.id, userId));
 
@@ -43,9 +45,9 @@ export async function POST(req: Request) {
       await db.insert(payments).values({
         userId: userId,
         amount: (session.amount_total || 0) / 100, // De centavos a pesos
-        type: paymentType || 'completo',
-        method: 'tarjeta',
-        status: 'completado',
+        type: paymentType || "completo",
+        method: "tarjeta",
+        status: "completado",
       });
 
       console.log(`✅ Pago procesado para el usuario ${userId}`);

@@ -166,7 +166,7 @@ function NavButton({
           active ? "bg-primary/10 shadow-inner" : "bg-transparent",
         )}
       >
-        {React.cloneElement(icon, { size: 20 })}
+        {icon}
       </div>
       <span className="text-[8px] font-black uppercase tracking-tighter">
         {label}

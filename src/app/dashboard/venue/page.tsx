@@ -11,6 +11,8 @@ import { getVenueInfo } from "@/app/actions/venue";
 import { DashboardCard } from "@/components/dashboard/DashboardCard";
 import { Button } from "@/components/ui/Button";
 
+export const dynamic = "force-dynamic";
+
 export default async function VenuePage() {
   const venue = await getVenueInfo();
 
