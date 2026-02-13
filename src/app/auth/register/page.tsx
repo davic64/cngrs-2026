@@ -550,15 +550,15 @@ export default function RegisterPage() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 sm:p-6">
-      <div className="w-full max-w-lg flex flex-col h-full max-h-[95vh] sm:max-h-none">
+    <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 sm:p-6 overflow-hidden">
+      <div className="w-full max-w-lg flex flex-col h-full max-h-[98vh]">
         <div className="text-center mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-black text-secondary uppercase tracking-tighter">
             Registro <span className="text-primary">CNGRS26</span>
           </h1>
         </div>
 
-        <div className="flex-1 overflow-y-auto sm:overflow-visible px-3 pb-12 -mx-3">
+        <div className="flex-1 overflow-y-auto no-scrollbar px-3 pb-12 -mx-3">
           <AnimatePresence mode="wait">
             {step === 1 && (
               <motion.div

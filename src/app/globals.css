@@ -13,3 +13,11 @@ html {
   --color-primary: var(--color-jidi-primary);
   --color-secondary: var(--color-jidi-blue);
 }
+
+@utility no-scrollbar {
+  ::-webkit-scrollbar {
+    display: none;
+  }
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
