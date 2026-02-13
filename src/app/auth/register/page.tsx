@@ -31,9 +31,12 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
+import {
   User as UserIcon
 } from "lucide-react";
 import * as React from "react";
+import { registerUser } from "@/app/actions/auth";
+import { verifyDocumentAge } from "@/app/actions/ocr";
 
 type FormData = {
   nombre: string;
@@ -66,6 +69,7 @@ export default function RegisterPage() {
   const [step, setStep] = React.useState(1);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isProcessing, setIsProcessing] = React.useState(false);
+  const [isVerifying, setIsVerifying] = React.useState(false);
   const [paymentStatus, setPaymentStatus] = React.useState<"success" | "error" | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
   const [profilePreviewUrl, setProfilePreviewUrl] = React.useState<string | null>(null);
@@ -123,25 +127,97 @@ export default function RegisterPage() {
     setStep((prev) => prev + 1);
   };
 
-  const simulateStripePayment = async () => {
-    setIsProcessing(true);
-    setPaymentStatus(null);
-    await new Promise((resolve) => setTimeout(resolve, 2500));
-    const isSuccess = Math.random() > 0.2;
-    setIsProcessing(false);
-    if (isSuccess) {
-      setPaymentStatus("success");
-      setTimeout(() => setStep(9), 1500);
+    const simulateStripePayment = async () => {
+
+      setIsProcessing(true);
+
+      setPaymentStatus(null);
+
+  
+
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+
+  
+
+      const isSuccess = Math.random() > 0.2;
+
+  
+
+      if (isSuccess) {
+
+        setPaymentStatus("success");
+
+        await handleSubmit();
+
+      } else {
+
+        setIsProcessing(false);
+
+        setPaymentStatus("error");
+
+      }
+
+    };
+
+  
+
+  const handleFinalAction = async () => {
+    if (formData.metodoPago === "tarjeta") {
+      await simulateStripePayment();
     } else {
-      setPaymentStatus("error");
+      await handleSubmit();
     }
   };
 
-  const handleFinalAction = () => {
-    if (formData.metodoPago === "tarjeta") {
-      simulateStripePayment();
-    } else {
+  const handleSubmit = async () => {
+    setIsProcessing(true);
+    
+    // Crear FormData real para enviar al servidor
+    const data = new FormData();
+    
+    // Datos básicos
+    data.append("nombre", formData.nombre);
+    data.append("apellido", formData.apellido);
+    data.append("telefono", formData.telefono);
+    data.append("password", formData.password);
+    data.append("edad", formData.edad);
+    data.append("genero", formData.genero);
+    data.append("tallaPlayera", formData.tallaPlayera);
+    
+    // Ubicación
+    data.append("pais", formData.pais === "Otro" ? formData.otroPais : formData.pais);
+    data.append("estado", formData.estado);
+    data.append("localidad", formData.localidad);
+    
+    // Salud
+    data.append("alergias", formData.alergias);
+    data.append("padecimiento", formData.padecimiento);
+    data.append("medicamento", formData.medicamento);
+    data.append("dosisFrecuencia", formData.dosisFrecuencia);
+    
+    // Contacto
+    if (formData.contactoEmergencia) {
+      data.append("contactoNombre", formData.contactoEmergencia.nombre);
+      data.append("contactoTelefono", formData.contactoEmergencia.telefono);
+    }
+    
+    // Pago
+    data.append("tipoPago", formData.tipoPago);
+    data.append("metodoPago", formData.metodoPago);
+    
+    // Archivos
+    if (formData.documento) data.append("documento", formData.documento);
+    if (formData.fotoPerfil) data.append("fotoPerfil", formData.fotoPerfil);
+    if (formData.comprobantePago) data.append("comprobantePago", formData.comprobantePago);
+
+    const result = await registerUser(data);
+    
+    setIsProcessing(false);
+    
+    if (result.success) {
       setStep(9);
+    } else {
+      alert(result.error || "Hubo un error al procesar tu registro");
     }
   };
 
@@ -182,6 +258,43 @@ export default function RegisterPage() {
         newData.dosisFrecuencia = "N/A";
       }
       setFormData(newData);
+    }
+  };
+
+  const verifyAgeFromDocument = async (file: File) => {
+    setIsVerifying(true);
+    try {
+      // 1. Convertir archivo a Base64 para enviar al Server Action
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
+      const base64Image = await base64Promise;
+
+      // 2. Llamar al Server Action profesional
+      const result = await verifyDocumentAge(base64Image);
+
+      if (result.success) {
+        if (!result.isValid) {
+          alert(`Lo sentimos, el sistema detectó una edad de ${result.age} años en tu identificación. El congreso es exclusivo para jóvenes de 15 a 29 años.`);
+          setFormData({ ...formData, documento: null });
+          setPreviewUrl(null);
+          return false;
+        }
+        console.log(`Edad verificada: ${result.age} años.`);
+        return true;
+      } else {
+        console.warn("No se pudo verificar la edad automáticamente:", result.error);
+        // Si falla el OCR por calidad de imagen, permitimos continuar pero 
+        // podríamos marcarlo para revisión manual del staff.
+        return true; 
+      }
+    } catch (error) {
+      console.error("Error en validación OCR:", error);
+      return true; 
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -242,17 +355,23 @@ export default function RegisterPage() {
                         <button type="button" onClick={() => { setFormData({ ...formData, documento: null }); setPreviewUrl(null); }} className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-full"><X className="h-4 w-4" /></button>
                       </div>
                     ) : (
-                      <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-gray-200 rounded-3xl cursor-pointer hover:bg-gray-50 transition-all">
+                      <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-gray-200 rounded-3xl cursor-pointer hover:bg-gray-50 transition-all relative overflow-hidden">
+                        {isVerifying ? (
+                          <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center z-10">
+                            <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
+                            <p className="text-xs font-black text-secondary uppercase tracking-widest animate-pulse">Verificando Edad...</p>
+                          </div>
+                        ) : null}
                         <Camera className="h-10 w-10 text-primary mb-2" />
                         <span className="text-sm font-bold text-secondary text-center px-4">{needsResponsiva ? "Subir Carta Responsiva" : "Tomar foto de INE"}</span>
-                        <input type="file" className="hidden" accept="image/*,application/pdf" onChange={(e) => handleFileChange(e, "documento")} />
+                        <input type="file" className="hidden" accept="image/*,application/pdf" onChange={(e) => handleFileChange(e, "documento")} disabled={isVerifying} />
                       </label>
                     )}
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <Button variant="outline" className="flex-1 h-14" onClick={handleBack}>Atrás</Button>
-                  <Button className="flex-[2] h-14 font-bold shadow-lg" disabled={!isStep2Valid} onClick={handleNext}>Siguiente</Button>
+                  <Button variant="outline" className="flex-1 h-14" onClick={handleBack} disabled={isVerifying}>Atrás</Button>
+                  <Button className="flex-[2] h-14 font-bold shadow-lg" disabled={!isStep2Valid || isVerifying} onClick={handleNext}>Siguiente</Button>
                 </div>
               </motion.div>
             )}

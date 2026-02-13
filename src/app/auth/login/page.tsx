@@ -5,6 +5,7 @@ import { ArrowRight, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as React from "react";
+import { loginUser } from "@/app/actions/auth";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Input } from "@/components/ui/Input";
@@ -22,16 +23,31 @@ export default function LoginPage() {
   const [telefono, setTelefono] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [rememberMe, setRememberMe] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState("");
 
   // Forgot Password State
   const [isForgotModalOpen, setIsForgotModalOpen] = React.useState(false);
   const [forgotPhone, setForgotPhone] = React.useState("");
   const [isRecoverySent, setIsRecoverySent] = React.useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate login and redirect
-    router.push("/dashboard");
+    setIsLoading(true);
+    setError("");
+
+    const formData = new FormData();
+    formData.append("telefono", telefono);
+    formData.append("password", password);
+
+    const result = await loginUser(formData);
+
+    if (result.success) {
+      router.push("/dashboard");
+    } else {
+      setError(result.error || "Error al iniciar sesión");
+      setIsLoading(false);
+    }
   };
 
   const handlePhoneChange = (value: string, setter: (v: string) => void) => {
@@ -67,6 +83,11 @@ export default function LoginPage() {
 
         {/* Login Card */}
         <div className="bg-white p-8 rounded-[2rem] shadow-xl shadow-black/5 border border-gray-100 space-y-6">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl text-center uppercase tracking-widest">
+              {error}
+            </div>
+          )}
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="space-y-4">
               <Input
@@ -77,6 +98,7 @@ export default function LoginPage() {
                 value={telefono}
                 onChange={(e) => handlePhoneChange(e.target.value, setTelefono)}
                 required
+                disabled={isLoading}
               />
               <div className="space-y-1">
                 <Input
@@ -86,6 +108,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  disabled={isLoading}
                 />
                 <div className="flex justify-end px-1">
                   <button
@@ -104,16 +127,21 @@ export default function LoginPage() {
                 label="Mantener sesión iniciada"
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
+                disabled={isLoading}
               />
             </div>
 
             <Button
               type="submit"
               className="w-full h-11 shadow-md shadow-primary/10 uppercase tracking-widest"
-              disabled={!telefono || !password}
+              disabled={!telefono || !password || isLoading}
             >
-              Entrar
-              <ArrowRight className="ml-2 h-4 w-4" />
+              {isLoading ? "Entrando..." : (
+                <>
+                  Entrar
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </>
+              )}
             </Button>
           </form>
 
