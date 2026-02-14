@@ -15,6 +15,7 @@ const DAYS = [
   { id: "1", label: "Jue 12", full: "Jueves 12 de Febrero" },
   { id: "2", label: "Vie 13", full: "Viernes 13 de Febrero" },
   { id: "3", label: "Sab 14", full: "Sábado 14 de Febrero" },
+  { id: "4", label: "Dom 15", full: "Domingo 15 de Febrero" },
 ];
 
 const CATEGORIES = [

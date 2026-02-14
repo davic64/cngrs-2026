@@ -1,25 +1,31 @@
 import {
+  getAdmins,
   getAdminStats,
   getLocalities,
   getPendingPayments,
   getSettings,
+  getVenue,
 } from "@/app/actions/admin";
 import { AdminDashboardClient } from "@/components/admin/AdminDashboardClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboardPage() {
-  const stats = await getAdminStats();
-  const pendingPayments = await getPendingPayments();
-  const config = await getSettings();
-  const allLocalities = await getLocalities();
+  const [stats, pendingPayments, config, allLocalities, admins] =
+    await Promise.all([
+      getAdminStats(),
+      getPendingPayments(),
+      getSettings(),
+      getLocalities(),
+      getAdmins(),
+    ]);
 
   return (
     <AdminDashboardClient
       stats={stats}
       pendingPayments={pendingPayments}
       config={config}
-      allLocalities={allLocalities}
+      admins={admins}
     />
   );
 }

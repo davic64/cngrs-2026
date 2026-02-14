@@ -16,3 +16,16 @@ export async function getNotifications() {
     return [];
   }
 }
+
+export async function getPinnedNotifications() {
+  try {
+    const pinned = await db.query.notifications.findMany({
+      where: (notifications, { eq }) => eq(notifications.isPinned, true),
+      orderBy: (notifications, { desc }) => [desc(notifications.createdAt)],
+    });
+    return pinned;
+  } catch (error) {
+    console.error("Error al obtener avisos fijados:", error);
+    return [];
+  }
+}

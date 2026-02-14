@@ -13,3 +13,17 @@ export async function getEvents() {
     return [];
   }
 }
+
+export async function getUpcomingEvents(limitNum = 3) {
+  try {
+    const upcoming = await db
+      .select()
+      .from(events)
+      .orderBy(asc(events.time))
+      .limit(limitNum);
+    return upcoming;
+  } catch (error) {
+    console.error("Error al obtener próximos eventos:", error);
+    return [];
+  }
+}

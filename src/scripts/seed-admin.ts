@@ -31,12 +31,12 @@ async function seedAdmin() {
       .limit(1);
 
     if (existingUser) {
-      console.log("⚠️ El usuario ya existe. Actualizando contraseña...");
+      console.log("⚠️ El usuario ya existe. Actualizando contraseña y rol...");
       await db
         .update(users)
-        .set({ password: hashedPassword })
+        .set({ password: hashedPassword, role: "admin" })
         .where(eq(users.phone, adminPhone));
-      console.log("✅ Contraseña actualizada correctamente.");
+      console.log("✅ Datos actualizados correctamente.");
     } else {
       console.log("🆕 Creando nuevo usuario administrador...");
       await db.insert(users).values({
@@ -44,6 +44,7 @@ async function seedAdmin() {
         lastName: "CNGRS",
         phone: adminPhone,
         password: hashedPassword,
+        role: "admin",
         age: 26,
         gender: "M",
         shirtSize: "L",

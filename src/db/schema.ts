@@ -28,6 +28,7 @@ export const paymentStatusEnum = pgEnum("payment_status", [
   "rechazado",
 ]);
 export const genderEnum = pgEnum("gender", ["M", "F", "Otro"]);
+export const roleEnum = pgEnum("role", ["admin", "user"]);
 
 // Tables
 export const users = pgTable("users", {
@@ -36,6 +37,7 @@ export const users = pgTable("users", {
   lastName: text("last_name").notNull(),
   phone: text("phone").notNull().unique(),
   password: text("password").notNull(),
+  role: roleEnum("role").default("user").notNull(),
   age: integer("age").notNull(),
   gender: genderEnum("gender").notNull(),
   shirtSize: text("shirt_size").notNull(),
@@ -131,6 +133,7 @@ export const venues = pgTable("venues", {
   description: text("description").notNull(),
   mapsUrl: text("maps_url").notNull(),
   websiteUrl: text("website_url"),
+  services: text("services"), // Store as JSON string
 });
 
 export const settings = pgTable("settings", {
@@ -141,11 +144,14 @@ export const settings = pgTable("settings", {
     .notNull(),
   stripePercentage: text("stripe_percentage").default("3.6").notNull(),
   stripeFixedFee: integer("stripe_fixed_fee").default(3).notNull(),
+  termsAndConditions: text("terms_and_conditions"),
+  priceDeadline: timestamp("price_deadline"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const localities = pgTable("localities", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
+  state: text("state").notNull(),
   country: text("country").notNull(),
 });

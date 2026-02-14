@@ -4,6 +4,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "CNGRS 2026",
   description: "Congreso Juvenil Internacional 2026",
+  icons: {
+    icon: "/favicon.png",
+  },
 };
 
 export default function RootLayout({

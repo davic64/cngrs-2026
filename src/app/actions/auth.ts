@@ -34,7 +34,10 @@ export async function loginUser(formData: FormData) {
       path: "/",
     });
 
-    return { success: true };
+    // Usamos el rol de la base de datos
+    const isAdmin = user.role === "admin";
+
+    return { success: true, isAdmin };
   } catch (error) {
     console.error("Error en login:", error);
     return { success: false, error: "Error interno en el servidor" };
@@ -184,17 +187,25 @@ export async function getSessionUser() {
 
     if (!user) return null;
 
-    const lastPayment = await db.query.payments.findFirst({
+    const userPayments = await db.query.payments.findMany({
       where: eq(payments.userId, user.id),
       orderBy: (payments, { desc }) => [desc(payments.createdAt)],
     });
 
     return {
       ...user,
-      lastPayment,
+      payments: userPayments,
+      lastPayment: userPayments[0] || null,
     };
   } catch (error) {
     console.error("Error al obtener usuario:", error);
     return null;
   }
+}
+
+export async function logoutUser() {
+  const cookieStore = await cookies();
+  cookieStore.delete("user_session");
+  revalidatePath("/");
+  return { success: true };
 }

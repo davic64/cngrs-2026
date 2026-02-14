@@ -25,6 +25,7 @@ import { verifyDocumentAge } from "@/app/actions/ocr";
 import { createCheckoutSession } from "@/app/actions/stripe";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
+import { EditorResultRenderer } from "@/components/ui/EditorResultRenderer";
 import { Input } from "@/components/ui/Input";
 import {
   Modal,
@@ -275,6 +276,7 @@ export default function RegisterPage() {
     registrationFeePrice: 500,
     stripePercentage: "3.6",
     stripeFixedFee: 3,
+    termsAndConditions: "",
   });
   const [dbLocalities, setDbLocalities] = React.useState<any[]>([]);
 
@@ -284,7 +286,10 @@ export default function RegisterPage() {
         getSettings(),
         getLocalities(),
       ]);
-      if (settingsData) setConfig(settingsData);
+      if (settingsData) setConfig({
+        ...settingsData,
+        termsAndConditions: settingsData.termsAndConditions || ""
+      } as any);
       if (localitiesData) setDbLocalities(localitiesData);
     };
     loadData();
@@ -354,7 +359,7 @@ export default function RegisterPage() {
     formData.genero &&
     formData.telefono &&
     formData.contactoEmergencia;
-  const isStep2Valid = isEdadValida && formData.documento;
+  const isStep2Valid = isEdadValida && (!needsResponsiva || formData.documento);
   const isStep3Valid =
     (formData.pais === "Otro" ? formData.otroPais : formData.pais) &&
     formData.estado &&
@@ -375,6 +380,13 @@ export default function RegisterPage() {
       alert("Lo sentimos, la edad permitida es de 15 a 29 años.");
       return;
     }
+    
+    // Si estamos en el paso 1 y no necesita responsiva, saltamos al 3
+    if (step === 1 && !needsResponsiva) {
+      setStep(3);
+      return;
+    }
+
     setStep((prev) => prev + 1);
   };
 
@@ -468,7 +480,14 @@ export default function RegisterPage() {
     }
   };
 
-  const handleBack = () => setStep((prev) => prev - 1);
+  const handleBack = () => {
+    // Si estamos en el paso 3 y no necesita responsiva, volvemos al 1
+    if (step === 3 && !needsResponsiva) {
+      setStep(1);
+      return;
+    }
+    setStep((prev) => prev - 1);
+  };
 
   const handleFileChange = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -1061,27 +1080,17 @@ export default function RegisterPage() {
                     setFormData({ ...formData, tallaPlayera: e.target.value })
                   }
                 />
-                <div className="bg-gray-50 p-4 rounded-xl text-[10px] h-32 overflow-auto text-gray-500 border border-gray-100 italic leading-relaxed space-y-2">
-                  <p className="font-bold uppercase tracking-widest text-secondary">
-                    Términos y Condiciones del CNGRS26
-                  </p>
-                  <p>1. Acepto que mi registro es personal e intransferible.</p>
-                  <p>
-                    2. Autorizo el uso de mi imagen en fotografías y videos con
-                    fines promocionales del evento.
-                  </p>
-                  <p>
-                    3. Me comprometo a seguir el código de conducta y respeto
-                    mutuo durante todas las sesiones.
-                  </p>
-                  <p>
-                    4. Entiendo que los pagos realizados no son reembolsables en
-                    caso de cancelación por parte del asistente.
-                  </p>
-                  <p>
-                    5. JIDI Internacional no se hace responsable por objetos
-                    perdidos durante el congreso.
-                  </p>
+                <div className="bg-gray-50/50 p-6 rounded-[2rem] h-80 overflow-y-auto border border-gray-100 italic custom-scrollbar shadow-inner">
+                  <EditorResultRenderer 
+                    data={config.termsAndConditions} 
+                  />
+                  {!config.termsAndConditions && (
+                    <div className="h-full flex items-center justify-center">
+                      <p className="text-[10px] text-gray-400 uppercase font-black animate-pulse">
+                        Cargando términos y condiciones...
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <Checkbox
                   label="He leído y acepto los términos y condiciones"

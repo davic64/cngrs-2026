@@ -11,6 +11,7 @@ import * as React from "react";
 import { broadcastNotification } from "@/app/actions/admin";
 import { DashboardCard } from "@/components/dashboard/DashboardCard";
 import { Button } from "@/components/ui/Button";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,7 @@ export function AdminNotificationsClient({
   initialNotices,
 }: AdminNotificationsClientProps) {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isPinned, setIsPinned] = React.useState(false);
   const feedLabelId = React.useId();
   const modalLabelId = React.useId();
 
@@ -36,13 +38,14 @@ export function AdminNotificationsClient({
       message: formData.get("message") as string,
       fullContent: formData.get("fullContent") as string,
       type: formData.get("type") as string,
-      isPinned: formData.get("isPinned") === "important",
+      isPinned: isPinned,
     };
 
     const result = await broadcastNotification(data);
     if (result.success) {
       alert("Aviso emitido con éxito a todos los asistentes.");
       (e.target as HTMLFormElement).reset();
+      setIsPinned(false);
     } else {
       alert("Error al emitir el aviso.");
     }
@@ -118,6 +121,14 @@ export function AdminNotificationsClient({
                   required
                   className="w-full min-h-[120px] bg-white border border-gray-300 rounded-xl p-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all"
                   placeholder="Aquí puedes poner todos los detalles..."
+                />
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-xl">
+                <Checkbox 
+                  label="Fijar Aviso (Aparecerá destacado en el dashboard)"
+                  checked={isPinned}
+                  onChange={(e) => setIsPinned(e.target.checked)}
                 />
               </div>
 

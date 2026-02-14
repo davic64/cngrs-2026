@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
+import { getSessionUser, logoutUser } from "@/app/actions/auth";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
@@ -21,7 +22,18 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
 
-  const handleLogout = () => {
+  React.useEffect(() => {
+    const checkAdmin = async () => {
+      const user = await getSessionUser();
+      if (user && user.role === "admin") {
+        router.push("/admin/dashboard");
+      }
+    };
+    checkAdmin();
+  }, [router]);
+
+  const handleLogout = async () => {
+    await logoutUser();
     router.push("/");
   };
 

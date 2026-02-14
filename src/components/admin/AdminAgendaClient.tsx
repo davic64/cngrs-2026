@@ -36,7 +36,7 @@ export function AdminAgendaClient({ initialEvents }: AdminAgendaClientProps) {
       time: formData.get("time") as string,
       location: formData.get("location") as string,
       category: formData.get("category") as string,
-      dayId: day,
+      dayId: formData.get("dayId") as string,
     };
 
     const result = await createEvent(data);
@@ -78,7 +78,7 @@ export function AdminAgendaClient({ initialEvents }: AdminAgendaClientProps) {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-8 space-y-4">
           <div className="flex gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
-            {[1, 2, 3].map((d) => (
+            {[1, 2, 3, 4].map((d) => (
               <button
                 key={d}
                 onClick={() => setDay(d.toString())}
@@ -186,15 +186,27 @@ export function AdminAgendaClient({ initialEvents }: AdminAgendaClientProps) {
                 required
               />
             </div>
-            <Select
-              name="category"
-              label="Categoría"
-              options={[
-                { value: "magistral", label: "Magistral" },
-                { value: "taller", label: "Taller" },
-                { value: "social", label: "Social" },
-              ]}
-            />
+            <div className="grid grid-cols-2 gap-4">
+              <Select
+                name="dayId"
+                label="Día"
+                options={[
+                  { value: "1", label: "Día 1" },
+                  { value: "2", label: "Día 2" },
+                  { value: "3", label: "Día 3" },
+                  { value: "4", label: "Día 4" },
+                ]}
+              />
+              <Select
+                name="category"
+                label="Categoría"
+                options={[
+                  { value: "magistral", label: "Magistral" },
+                  { value: "taller", label: "Taller" },
+                  { value: "social", label: "Social" },
+                ]}
+              />
+            </div>
           </ModalContent>
           <ModalFooter className="flex gap-3">
             <Button

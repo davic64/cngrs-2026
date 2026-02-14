@@ -2,14 +2,17 @@
 
 import {
   Bell,
+  Building2,
   Calendar,
   CreditCard,
   LayoutDashboard,
   LogOut,
+  MapPin,
   Users,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import type * as React from "react";
+import { logoutUser } from "@/app/actions/auth";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
@@ -21,7 +24,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await logoutUser();
     router.push("/");
   };
 
@@ -37,9 +41,19 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       href: "/admin/users",
     },
     {
+      icon: <Building2 size={20} />,
+      label: "Localidades",
+      href: "/admin/localities",
+    },
+    {
       icon: <CreditCard size={20} />,
       label: "Pagos Pendientes",
       href: "/admin/payments",
+    },
+    {
+      icon: <MapPin size={20} />,
+      label: "Gestionar Sede",
+      href: "/admin/venue",
     },
     {
       icon: <Calendar size={20} />,
@@ -85,7 +99,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             className="w-full justify-start gap-3 h-12 text-white/40 hover:text-red-400 hover:bg-white/5 font-bold uppercase text-[10px] tracking-widest rounded-xl transition-all"
           >
             <LogOut size={18} />
-            Cerrar Panel
+            Cerrar Sesión
           </Button>
         </div>
       </aside>

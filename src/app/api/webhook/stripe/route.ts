@@ -32,16 +32,7 @@ export async function POST(req: Request) {
     const paymentType = session.metadata?.paymentType;
 
     if (userId) {
-      // 1. Actualizar estatus del usuario
-      await db
-        .update(users)
-        .set({
-          registrationStatus:
-            paymentType === "completo" ? "completado" : "parcial",
-        })
-        .where(eq(users.id, userId));
-
-      // 2. Registrar el pago en la tabla de pagos
+      // 1. Registrar el pago en la tabla de pagos PRIMERO
       await db.insert(payments).values({
         userId: userId,
         amount: (session.amount_total || 0) / 100, // De centavos a pesos
@@ -50,7 +41,27 @@ export async function POST(req: Request) {
         status: "completado",
       });
 
-      console.log(`✅ Pago procesado para el usuario ${userId}`);
+      // 2. Calcular total pagado acumulado
+      const userPayments = await db.query.payments.findMany({
+        where: (payments, { and, eq }) => 
+          and(eq(payments.userId, userId), eq(payments.status, "completado"))
+      });
+      
+      const totalPaid = userPayments.reduce((acc, p) => acc + p.amount, 0);
+
+      // 3. Obtener meta de settings
+      const config = await db.query.settings.findFirst();
+      const requiredAmount = config?.fullPaymentPrice || 1500;
+
+      // 4. Actualizar estatus del usuario
+      await db
+        .update(users)
+        .set({
+          registrationStatus: totalPaid >= requiredAmount ? "completado" : "parcial",
+        })
+        .where(eq(users.id, userId));
+
+      console.log(`✅ Pago procesado para el usuario ${userId}. Total: ${totalPaid}/${requiredAmount}`);
     }
   }
 

@@ -14,6 +14,7 @@ export async function getVenueInfo() {
           "Un espacio moderno y accesible diseñado para albergar a los asistentes del CNGRS26.",
         mapsUrl: "https://maps.google.com",
         websiteUrl: "#",
+        services: null,
       }
     );
   } catch (error) {

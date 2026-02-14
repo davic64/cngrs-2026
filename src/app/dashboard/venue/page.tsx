@@ -5,6 +5,7 @@ import {
   MapPin,
   Navigation,
   Shield,
+  Trees,
   Wifi,
 } from "lucide-react";
 import { getVenueInfo } from "@/app/actions/venue";
@@ -16,14 +17,24 @@ export const dynamic = "force-dynamic";
 export default async function VenuePage() {
   const venue = await getVenueInfo();
 
-  const services = [
-    { icon: <Wifi size={20} />, label: "Wi-Fi Gratuito" },
-    { icon: <Coffee size={20} />, label: "Área de Snacks" },
-    { icon: <Car size={20} />, label: "Estacionamiento" },
-    { icon: <Shield size={20} />, label: "Servicio Médico" },
-  ];
-
   if (!venue) return null;
+
+  // Parse services from DB or use defaults
+  let services = [];
+  try {
+    services = (venue as any).services ? JSON.parse((venue as any).services) : [];
+  } catch (e) {
+    services = [];
+  }
+
+  // Map icon strings to components
+  const iconMap: Record<string, React.ReactNode> = {
+    wifi: <Wifi size={20} />,
+    coffee: <Coffee size={20} />,
+    parking: <Car size={20} />,
+    shield: <Shield size={20} />,
+    outdoor: <Trees size={20} />,
+  };
 
   return (
     <div className="w-full max-w-6xl mx-auto flex flex-col p-4 sm:p-8 pb-32 md:pb-12">
@@ -95,12 +106,14 @@ export default async function VenuePage() {
           </DashboardCard>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {services.map((service, idx) => (
+            {services.map((service: any, idx: number) => (
               <div
                 key={idx}
                 className="bg-white p-6 rounded-[2rem] border border-gray-100 flex flex-col items-center justify-center gap-3 shadow-xl shadow-black/[0.02] hover:border-primary/20 transition-all"
               >
-                <div className="text-primary">{service.icon}</div>
+                <div className="text-primary">
+                  {iconMap[service.iconId] || <MapPin size={20} />}
+                </div>
                 <span className="text-[9px] font-black uppercase tracking-widest text-secondary text-center leading-tight">
                   {service.label}
                 </span>

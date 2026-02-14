@@ -5,7 +5,7 @@ import { ArrowRight, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as React from "react";
-import { loginUser } from "@/app/actions/auth";
+import { getSessionUser, loginUser } from "@/app/actions/auth";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Input } from "@/components/ui/Input";
@@ -31,6 +31,20 @@ export default function LoginPage() {
   const [forgotPhone, setForgotPhone] = React.useState("");
   const [isRecoverySent, setIsRecoverySent] = React.useState(false);
 
+  React.useEffect(() => {
+    const checkSession = async () => {
+      const user = await getSessionUser();
+      if (user) {
+        if (user.role === "admin") {
+          router.push("/admin/dashboard");
+        } else {
+          router.push("/dashboard");
+        }
+      }
+    };
+    checkSession();
+  }, [router]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -43,7 +57,11 @@ export default function LoginPage() {
     const result = await loginUser(formData);
 
     if (result.success) {
-      router.push("/dashboard");
+      if (result.isAdmin) {
+        router.push("/admin/dashboard");
+      } else {
+        router.push("/dashboard");
+      }
     } else {
       setError(result.error || "Error al iniciar sesión");
       setIsLoading(false);

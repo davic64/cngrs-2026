@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { jsPDF } from "jspdf";
 import {
   AlertCircle,
+  Banknote,
   Calendar,
   Camera,
   CheckCircle2,
@@ -13,10 +14,14 @@ import {
   History,
   Lock,
   MapPin,
+  Megaphone,
+  Pin,
+  Upload,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import * as React from "react";
+import { createCheckoutSessionForBalance, uploadManualPaymentProof } from "@/app/actions/stripe";
 import { DashboardAction } from "@/components/dashboard/DashboardAction";
 import { DashboardCard } from "@/components/dashboard/DashboardCard";
 import { EventItem } from "@/components/dashboard/EventItem";
@@ -51,39 +56,69 @@ const itemVariants = {
 
 interface DashboardClientProps {
   user: any;
+  upcomingEvents: any[];
+  config: any;
+  pinnedNotifications?: any[];
 }
 
-export function DashboardClient({ user }: DashboardClientProps) {
+export function DashboardClient({ 
+  user, 
+  upcomingEvents, 
+  config,
+  pinnedNotifications = []
+}: DashboardClientProps) {
   const router = useRouter();
   const [isQRModalOpen, setIsQRModalOpen] = React.useState(false);
   const [isStatusModalOpen, setIsStatusModalOpen] = React.useState(false);
+  const [isProcessing, setIsProcessing] = React.useState(false);
   const [paymentFile, setPaymentFile] = React.useState<File | null>(null);
+  const [balanceMethod, setBalanceMethod] = React.useState<"tarjeta" | "transferencia" | "efectivo">("tarjeta");
+  
   const [isValidationPending, setIsValidationPending] = React.useState(
-    user.lastPayment?.status === "revision",
+    user.payments?.some((p: any) => p.status === "revision") || false
   );
+
+  // Calcular balance
+  const totalRequired = config?.fullPaymentPrice || 1500;
+  const totalPaid = user.payments
+    ?.filter((p: any) => p.status === "completado")
+    .reduce((acc: number, p: any) => acc + p.amount, 0) || 0;
+  
+  const balance = totalRequired - totalPaid;
+  const isFullyPaid = balance <= 0;
 
   const qrRef = React.useRef<SVGSVGElement>(null);
 
-  const nextEvents = [
-    {
-      id: 1,
-      title: "Conferencia Magistral",
-      speaker: "Dr. Armando Guerra",
-      time: "10:00 AM",
-      location: "Auditorio Principal",
-    },
-    {
-      id: 2,
-      title: "Taller: Liderazgo",
-      speaker: "Mtra. Paz Ensuera",
-      time: "12:30 PM",
-      location: "Sala B",
-    },
-  ];
-
-  const handleUpload = () => {
-    setIsValidationPending(true);
-    setIsStatusModalOpen(false);
+  const handleBalancePayment = async () => {
+    setIsProcessing(true);
+    if (balanceMethod === "tarjeta") {
+      const result = await createCheckoutSessionForBalance(user.id, balance);
+      if (result.success && result.url) {
+        window.location.href = result.url;
+      } else {
+        alert(result.error);
+        setIsProcessing(false);
+      }
+    } else {
+      if (!paymentFile) {
+        alert("Por favor sube tu comprobante");
+        setIsProcessing(false);
+        return;
+      }
+      const formData = new FormData();
+      formData.append("file", paymentFile);
+      formData.append("method", balanceMethod);
+      
+      const result = await uploadManualPaymentProof(user.id, balance, formData);
+      if (result.success) {
+        alert("Comprobante enviado. El staff lo revisará pronto.");
+        setIsStatusModalOpen(false);
+        setIsValidationPending(true);
+      } else {
+        alert(result.error);
+      }
+      setIsProcessing(false);
+    }
   };
 
   const currentStatus = isValidationPending
@@ -290,6 +325,43 @@ export function DashboardClient({ user }: DashboardClientProps) {
         </div>
 
         <div className="lg:col-span-7 space-y-6 lg:space-y-8">
+          {/* Avisos Fijados */}
+          {pinnedNotifications.length > 0 && (
+            <div className="space-y-4">
+              {pinnedNotifications.map((notif) => (
+                <motion.div
+                  key={notif.id}
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-primary/10 border border-primary/20 p-6 rounded-[2rem] relative overflow-hidden group"
+                >
+                  <div className="absolute top-4 right-6 opacity-20">
+                    <Pin size={16} className="text-primary fill-primary rotate-45" />
+                  </div>
+                  <div className="flex gap-4 items-start relative z-10">
+                    <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shrink-0 shadow-lg shadow-primary/20">
+                      <Megaphone size={20} className="text-secondary" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <h3 className="text-xs font-black text-secondary uppercase tracking-wider mb-1">
+                        {notif.title}
+                      </h3>
+                      <p className="text-[11px] font-medium text-secondary/70 leading-relaxed line-clamp-2">
+                        {notif.message}
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => router.push("/dashboard/notifications")}
+                      className="h-8 w-8 rounded-lg bg-white/50 flex items-center justify-center text-primary hover:bg-white transition-colors mt-1"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <DashboardAction
               icon={<Calendar />}
@@ -304,6 +376,39 @@ export function DashboardClient({ user }: DashboardClientProps) {
               onClick={() => router.push("/dashboard/venue")}
             />
           </div>
+
+          {/* Sección de Liquidación de Pago */}
+          {!isFullyPaid && !isValidationPending && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+            >
+              <DashboardCard className="bg-amber-50 border-amber-100 overflow-hidden relative">
+                <div className="absolute top-0 right-0 p-6 opacity-5 pointer-events-none">
+                  <Banknote size={120} className="text-amber-600" />
+                </div>
+                <div className="flex flex-col sm:flex-row items-center gap-6 relative z-10">
+                  <div className="h-16 w-16 rounded-2xl bg-white flex items-center justify-center text-amber-600 shadow-sm shrink-0">
+                    <Banknote size={32} />
+                  </div>
+                  <div className="flex-1 text-center sm:text-left">
+                    <h3 className="text-lg font-black text-amber-900 uppercase tracking-tight">
+                      Liquidación Pendiente
+                    </h3>
+                    <p className="text-xs font-bold text-amber-800/60 uppercase tracking-widest mt-1">
+                      Saldo por pagar: <span className="text-amber-600 font-black text-sm">${balance} MXN</span>
+                    </p>
+                  </div>
+                  <Button 
+                    className="w-full sm:w-auto h-12 px-8 bg-amber-600 hover:bg-amber-700 text-white font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-amber-200"
+                    onClick={() => setIsStatusModalOpen(true)}
+                  >
+                    Liquidar Ahora
+                  </Button>
+                </div>
+              </DashboardCard>
+            </motion.div>
+          )}
 
           <DashboardCard
             title="Mi Agenda Hoy"
@@ -324,11 +429,19 @@ export function DashboardClient({ user }: DashboardClientProps) {
               animate="visible"
               className="space-y-6"
             >
-              {nextEvents.map((event) => (
-                <motion.div key={event.id} variants={itemVariants}>
-                  <EventItem {...event} />
-                </motion.div>
-              ))}
+              {upcomingEvents.length > 0 ? (
+                upcomingEvents.map((event) => (
+                  <motion.div key={event.id} variants={itemVariants}>
+                    <EventItem {...event} />
+                  </motion.div>
+                ))
+              ) : (
+                <div className="py-8 text-center bg-gray-50 rounded-3xl border border-dashed border-gray-200">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                    No hay actividades programadas
+                  </p>
+                </div>
+              )}
             </motion.div>
           </DashboardCard>
         </div>
@@ -386,47 +499,89 @@ export function DashboardClient({ user }: DashboardClientProps) {
               <h3 className="text-xl font-black uppercase text-secondary">
                 En Revisión
               </h3>
-              <p className="text-sm text-gray-500">
-                Estamos validando tu comprobante. Te avisaremos pronto.
+              <p className="text-sm text-gray-500 font-medium px-4">
+                Estamos validando tu último pago. En cuanto el staff lo apruebe, se actualizará tu saldo.
               </p>
             </div>
           ) : (
             <div className="space-y-6 text-left">
-              <div className="p-5 bg-amber-50 border border-amber-100 rounded-2xl flex items-start gap-4">
-                <Clock className="text-amber-600 shrink-0" size={20} />
+              <div className="p-5 bg-amber-50 border border-amber-100 rounded-[2rem] flex items-start gap-4">
+                <div className="h-10 w-10 bg-white rounded-xl flex items-center justify-center text-amber-600 shadow-sm shrink-0">
+                  <Banknote size={20} />
+                </div>
                 <div>
                   <p className="text-[10px] font-black uppercase text-amber-700 mb-1">
-                    Pago Pendiente
+                    Monto a Liquidar
                   </p>
-                  <p className="text-xs font-bold text-amber-900/70">
-                    Sube tu comprobante para que podamos validar tu acceso.
+                  <p className="text-xl font-black text-amber-900 leading-none">
+                    ${balance} MXN
                   </p>
+                  {config?.priceDeadline && (
+                    <p className="text-[9px] font-bold text-primary uppercase mt-2 tracking-widest">
+                      Vence el {new Date(config.priceDeadline).toLocaleDateString()}
+                    </p>
+                  )}
                 </div>
               </div>
-              <div className="space-y-3">
-                <p className="text-[10px] font-black uppercase text-secondary tracking-widest ml-1">
-                  Subir Comprobante
-                </p>
-                <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-200 rounded-3xl cursor-pointer hover:bg-gray-50">
-                  <Camera className="h-8 w-8 text-primary mb-2" />
-                  <span className="text-[10px] font-black text-gray-400 uppercase">
-                    {paymentFile ? paymentFile.name : "Subir archivo"}
-                  </span>
-                  <input
-                    type="file"
-                    className="hidden"
-                    onChange={(e) =>
-                      setPaymentFile(e.target.files?.[0] || null)
-                    }
-                  />
-                </label>
+
+              {/* Selector de Método */}
+              <div className="grid grid-cols-3 gap-2">
+                {(["tarjeta", "transferencia", "efectivo"] as const).map((method) => (
+                  <button
+                    key={method}
+                    type="button"
+                    onClick={() => setBalanceMethod(method)}
+                    className={cn(
+                      "flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border-2 transition-all",
+                      balanceMethod === method
+                        ? "bg-primary/10 border-primary text-primary"
+                        : "bg-white border-gray-100 text-gray-400 hover:border-primary/30"
+                    )}
+                  >
+                    <span className="text-[9px] font-black uppercase tracking-tighter">{method}</span>
+                  </button>
+                ))}
               </div>
+
+              {balanceMethod !== "tarjeta" ? (
+                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+                  <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                    <p className="text-[10px] font-black text-secondary uppercase mb-2">Instrucciones</p>
+                    <p className="text-[11px] text-gray-500 leading-relaxed font-medium">
+                      {balanceMethod === "transferencia" 
+                        ? "Realiza la transferencia por el monto exacto y sube el comprobante aquí mismo." 
+                        : "Acude con el staff encargado para realizar tu pago en efectivo y solicita que firmen tu comprobante."}
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-200 rounded-[2rem] cursor-pointer hover:bg-gray-50 transition-all">
+                      <Upload className="h-6 w-6 text-primary mb-2" />
+                      <span className="text-[10px] font-black text-gray-400 uppercase text-center px-4">
+                        {paymentFile ? paymentFile.name : "Subir comprobante"}
+                      </span>
+                      <input
+                        type="file"
+                        className="hidden"
+                        onChange={(e) => setPaymentFile(e.target.files?.[0] || null)}
+                      />
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-6 bg-gray-50 rounded-[2rem] border border-gray-100 text-center animate-in fade-in slide-in-from-bottom-2">
+                  <p className="text-[11px] text-gray-500 font-medium">
+                    Serás redirigido a la pasarela de pago segura de **Stripe** para completar tu transacción.
+                  </p>
+                </div>
+              )}
+
               <Button
-                className="w-full h-12 font-black uppercase text-xs"
-                disabled={!paymentFile}
-                onClick={handleUpload}
+                className="w-full h-14 font-black uppercase text-xs tracking-widest shadow-xl shadow-primary/20"
+                disabled={isProcessing || (balanceMethod !== "tarjeta" && !paymentFile)}
+                onClick={handleBalancePayment}
               >
-                Enviar Comprobante
+                {isProcessing ? "Procesando..." : balanceMethod === "tarjeta" ? "Pagar con Tarjeta" : "Enviar Comprobante"}
               </Button>
             </div>
           )}
