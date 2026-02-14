@@ -67,12 +67,17 @@ export async function createCheckoutSessionForBalance(
   amount: number,
 ) {
   try {
-    // Calcular comisión Stripe sobre el monto faltante
+    // 1. Obtener configuración para comisiones
     const config = await db.query.settings.findFirst();
     const commissionPercent =
       parseFloat(config?.stripePercentage || "3.6") / 100;
     const fixedFee = config?.stripeFixedFee || 3;
+    
+    // 2. Calcular total con comisión
     const totalPrice = Math.ceil(amount * (1 + commissionPercent) + fixedFee);
+
+    // 3. Obtener URL base del entorno o fallback
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
@@ -82,7 +87,7 @@ export async function createCheckoutSessionForBalance(
             currency: "mxn",
             product_data: {
               name: "Liquidación de Pago - CNGRS26",
-              description: "Pago de saldo restante para el Congreso Juvenil",
+              description: `Pago de saldo restante ($${amount} MXN + comisiones)`,
             },
             unit_amount: totalPrice * 100,
           },
@@ -90,17 +95,18 @@ export async function createCheckoutSessionForBalance(
         },
       ],
       mode: "payment",
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?payment=success`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?payment=cancel`,
+      success_url: `${baseUrl}/dashboard?payment=success`,
+      cancel_url: `${baseUrl}/dashboard?payment=cancel`,
       metadata: {
         userId: userId,
-        paymentType: "completo", // Al liquidar se marca como completo
+        paymentType: "completo", 
       },
     });
 
     return { success: true, url: session.url };
-  } catch (error) {
-    return { success: false, error: "Error al crear pago de liquidación" };
+  } catch (error: any) {
+    console.error("Error al crear sesión de Stripe (Liquidación):", error);
+    return { success: false, error: error.message || "Error al crear pago de liquidación" };
   }
 }
 

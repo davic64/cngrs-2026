@@ -27,6 +27,7 @@ import { DashboardCard } from "@/components/dashboard/DashboardCard";
 import { EventItem } from "@/components/dashboard/EventItem";
 // Components
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import {
   Modal,
   ModalContent,
@@ -242,7 +243,7 @@ export function DashboardClient({
                     <Lock size={32} className="text-gray-300" />
                   </div>
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-4">
-                    Se activará al validar tu pago
+                    Se activará al completar tu pago
                   </p>
                 </div>
               )}
@@ -545,33 +546,71 @@ export function DashboardClient({
 
               {balanceMethod !== "tarjeta" ? (
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
-                  <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                    <p className="text-[10px] font-black text-secondary uppercase mb-2">Instrucciones</p>
-                    <p className="text-[11px] text-gray-500 leading-relaxed font-medium">
-                      {balanceMethod === "transferencia" 
-                        ? "Realiza la transferencia por el monto exacto y sube el comprobante aquí mismo." 
-                        : "Acude con el staff encargado para realizar tu pago en efectivo y solicita que firmen tu comprobante."}
-                    </p>
+                  <div className="p-5 bg-gray-50 rounded-[2rem] border border-gray-100 space-y-3">
+                    <p className="text-[10px] font-black text-secondary uppercase tracking-widest">Instrucciones de Pago</p>
+                    {balanceMethod === "transferencia" ? (
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center border-b border-gray-200 pb-2">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase">Banco</span>
+                          <span className="text-xs font-black text-secondary">BBVA</span>
+                        </div>
+                        <div className="flex justify-between items-center border-b border-gray-200 pb-2">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase">CLABE</span>
+                          <span className="text-xs font-black text-secondary tracking-tighter">0123 4567 8901 2345 67</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase">Nombre</span>
+                          <span className="text-[10px] font-black text-primary uppercase text-right leading-tight">JIDI Internacional A.C.</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 text-center py-2">
+                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Referencia de Pago (OXXO)</p>
+                        <p className="text-3xl font-black text-primary tracking-tighter">{user.phone}</p>
+                        <p className="text-[9px] font-medium text-gray-500 leading-relaxed italic px-4">
+                          Menciona este número al cajero para realizar tu depósito en efectivo.
+                        </p>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="space-y-3">
-                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-200 rounded-[2rem] cursor-pointer hover:bg-gray-50 transition-all">
-                      <Upload className="h-6 w-6 text-primary mb-2" />
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-200 rounded-[2rem] cursor-pointer hover:bg-gray-50 transition-all group">
+                      <Upload className="h-6 w-6 text-primary mb-2 group-hover:-translate-y-1 transition-transform" />
                       <span className="text-[10px] font-black text-gray-400 uppercase text-center px-4">
-                        {paymentFile ? paymentFile.name : "Subir comprobante"}
+                        {paymentFile ? paymentFile.name : "Subir comprobante de pago"}
                       </span>
                       <input
                         type="file"
                         className="hidden"
+                        accept="image/*,application/pdf"
                         onChange={(e) => setPaymentFile(e.target.files?.[0] || null)}
                       />
                     </label>
                   </div>
                 </div>
               ) : (
-                <div className="p-6 bg-gray-50 rounded-[2rem] border border-gray-100 text-center animate-in fade-in slide-in-from-bottom-2">
-                  <p className="text-[11px] text-gray-500 font-medium">
-                    Serás redirigido a la pasarela de pago segura de **Stripe** para completar tu transacción.
+                <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2">
+                  <div className="p-4 bg-green-50 border border-green-100 rounded-2xl flex items-center gap-3">
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    <p className="text-[10px] font-bold text-green-700 uppercase tracking-widest leading-none">
+                      Pago seguro con Stripe
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <Input
+                      label="Número de Tarjeta"
+                      placeholder="0000 0000 0000 0000"
+                    />
+                    <div className="grid grid-cols-2 gap-4">
+                      <Input label="Vencimiento" placeholder="MM/YY" />
+                      <Input label="CVV" placeholder="123" />
+                    </div>
+                  </div>
+                  
+                  <p className="text-[10px] text-gray-400 font-medium text-center px-4 leading-relaxed italic">
+                    Al hacer clic, serás redirigido para confirmar la transacción de forma segura.
                   </p>
                 </div>
               )}
@@ -581,7 +620,7 @@ export function DashboardClient({
                 disabled={isProcessing || (balanceMethod !== "tarjeta" && !paymentFile)}
                 onClick={handleBalancePayment}
               >
-                {isProcessing ? "Procesando..." : balanceMethod === "tarjeta" ? "Pagar con Tarjeta" : "Enviar Comprobante"}
+                {isProcessing ? "Procesando..." : balanceMethod === "tarjeta" ? "Liquidar con Tarjeta" : "Enviar Comprobante"}
               </Button>
             </div>
           )}

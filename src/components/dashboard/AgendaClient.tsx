@@ -49,17 +49,9 @@ interface AgendaClientProps {
 
 export function AgendaClient({ initialEvents }: AgendaClientProps) {
   const [selectedDay, setSelectedDay] = React.useState("1");
-  const [filterCategory, setFilterCategory] = React.useState("all");
-  const [searchQuery, setSearchQuery] = React.useState("");
 
   const filteredEvents = initialEvents.filter((event) => {
-    const matchesDay = event.dayId === selectedDay;
-    const matchesCategory =
-      filterCategory === "all" || event.category === filterCategory;
-    const matchesSearch =
-      event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      event.speaker.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesDay && matchesCategory && matchesSearch;
+    return event.dayId === selectedDay;
   });
 
   return (
@@ -96,86 +88,40 @@ export function AgendaClient({ initialEvents }: AgendaClientProps) {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <aside className="lg:col-span-4 space-y-6">
-          <DashboardCard title="Filtros">
-            <div className="space-y-6">
-              <Input
-                label="Buscar Actividad"
-                placeholder="Nombre o ponente..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <Select
-                label="Categoría"
-                options={CATEGORIES}
-                value={filterCategory}
-                onChange={(e) => setFilterCategory(e.target.value)}
-              />
-              <div className="pt-2">
-                <Button
-                  variant="outline"
-                  className="w-full h-11 font-bold uppercase text-[10px] tracking-widest"
-                  onClick={() => {
-                    setSearchQuery("");
-                    setFilterCategory("all");
-                  }}
-                >
-                  Limpiar Filtros
-                </Button>
-              </div>
-            </div>
-          </DashboardCard>
-
-          <div className="bg-secondary rounded-[2rem] p-8 text-white relative overflow-hidden shadow-xl">
-            <div className="relative z-10">
-              <Clock className="text-primary mb-4" size={32} />
-              <h3 className="text-lg font-black uppercase tracking-tighter leading-tight mb-2">
-                Puntualidad
-              </h3>
-              <p className="text-xs text-white/60 leading-relaxed">
-                Te recomendamos llegar 10 minutos antes de cada sesión para
-                asegurar tu lugar.
-              </p>
-            </div>
-          </div>
-        </aside>
-
-        <div className="lg:col-span-8 space-y-6">
-          <div className="flex items-center justify-between mb-4 px-2">
-            <h2 className="text-sm font-black text-secondary uppercase tracking-[0.15em]">
-              {DAYS.find((d) => d.id === selectedDay)?.full}
-            </h2>
-            <span className="text-[10px] font-black text-primary uppercase bg-primary/10 px-3 py-1 rounded-full">
-              {filteredEvents.length} Eventos
-            </span>
-          </div>
-
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={selectedDay + filterCategory + searchQuery}
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-              className="space-y-4"
-            >
-              {filteredEvents.length > 0 ? (
-                filteredEvents.map((event) => (
-                  <motion.div key={event.id} variants={itemVariants} layout>
-                    <EventCard {...event} />
-                  </motion.div>
-                ))
-              ) : (
-                <div className="bg-white rounded-[2rem] p-12 text-center border border-gray-100 shadow-sm flex flex-col items-center">
-                  <Search size={32} className="text-gray-200 mb-4" />
-                  <p className="font-black text-secondary uppercase tracking-tighter">
-                    Sin resultados
-                  </p>
-                </div>
-              )}
-            </motion.div>
-          </AnimatePresence>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between mb-4 px-2">
+          <h2 className="text-sm font-black text-secondary uppercase tracking-[0.15em]">
+            {DAYS.find((d) => d.id === selectedDay)?.full}
+          </h2>
+          <span className="text-[10px] font-black text-primary uppercase bg-primary/10 px-3 py-1 rounded-full">
+            {filteredEvents.length} Eventos
+          </span>
         </div>
+
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={selectedDay}
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="grid grid-cols-1 md:grid-cols-2 gap-4"
+          >
+            {filteredEvents.length > 0 ? (
+              filteredEvents.map((event) => (
+                <motion.div key={event.id} variants={itemVariants} layout>
+                  <EventCard {...event} />
+                </motion.div>
+              ))
+            ) : (
+              <div className="col-span-full bg-white rounded-[2.5rem] p-16 text-center border border-gray-100 shadow-sm flex flex-col items-center">
+                <Clock size={40} className="text-gray-100 mb-4" />
+                <p className="font-black text-secondary uppercase tracking-tighter">
+                  Sin actividades programadas para hoy
+                </p>
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );
