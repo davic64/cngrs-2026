@@ -56,6 +56,10 @@ export async function getSettings() {
       stripeFixedFee: 3,
       termsAndConditions: "",
       priceDeadline: null,
+      bankName: "BBVA",
+      bankCLABE: "0123 4567 8901 2345 67",
+      bankHolder: "JIDI Internacional A.C.",
+      oxxoReference: "Tu número de teléfono",
     };
   }
 }
@@ -67,6 +71,10 @@ export async function updateSettings(data: {
   stripeFixedFee: number;
   termsAndConditions?: string;
   priceDeadline?: Date | null;
+  bankName?: string;
+  bankCLABE?: string;
+  bankHolder?: string;
+  oxxoReference?: string;
 }) {
   await db.update(settings).set({ ...data, updatedAt: new Date() });
   revalidatePath("/admin/dashboard");

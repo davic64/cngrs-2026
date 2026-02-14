@@ -1,5 +1,6 @@
 "use client";
 
+import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, Search, X } from "lucide-react";
 import * as React from "react";
 import { cn } from "@/lib/utils";
@@ -84,7 +85,7 @@ export function SearchableSelect({
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="absolute z-50 mt-2 w-full rounded-2xl border border-gray-100 bg-white shadow-2xl shadow-black/10 overflow-hidden"
+              className="absolute z-[100] mt-2 w-full rounded-2xl border border-gray-100 bg-white shadow-2xl shadow-black/10 overflow-hidden"
             >
               <div className="p-2 border-b border-gray-50 flex items-center gap-2">
                 <Search className="h-4 w-4 text-gray-400 ml-2" />
@@ -96,6 +97,7 @@ export function SearchableSelect({
                 />
                 {search && (
                   <button
+                    type="button"
                     onClick={() => setSearch("")}
                     className="p-1 hover:bg-gray-100 rounded-lg"
                   >
@@ -139,5 +141,3 @@ export function SearchableSelect({
     </div>
   );
 }
-
-import { AnimatePresence, motion } from "framer-motion";

@@ -552,23 +552,25 @@ export function DashboardClient({
                       <div className="space-y-2">
                         <div className="flex justify-between items-center border-b border-gray-200 pb-2">
                           <span className="text-[10px] font-bold text-gray-400 uppercase">Banco</span>
-                          <span className="text-xs font-black text-secondary">BBVA</span>
+                          <span className="text-xs font-black text-secondary">{config.bankName || "BBVA"}</span>
                         </div>
                         <div className="flex justify-between items-center border-b border-gray-200 pb-2">
                           <span className="text-[10px] font-bold text-gray-400 uppercase">CLABE</span>
-                          <span className="text-xs font-black text-secondary tracking-tighter">0123 4567 8901 2345 67</span>
+                          <span className="text-xs font-black text-secondary tracking-tighter">{config.bankCLABE || "0123 4567 8901 2345 67"}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-[10px] font-bold text-gray-400 uppercase">Nombre</span>
-                          <span className="text-[10px] font-black text-primary uppercase text-right leading-tight">JIDI Internacional A.C.</span>
+                          <span className="text-[10px] font-black text-primary uppercase text-right leading-tight">{config.bankHolder || "JIDI Internacional A.C."}</span>
                         </div>
                       </div>
                     ) : (
                       <div className="space-y-2 text-center py-2">
                         <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Referencia de Pago (OXXO)</p>
-                        <p className="text-3xl font-black text-primary tracking-tighter">{user.phone}</p>
+                        <p className="text-3xl font-black text-primary tracking-tighter">
+                          {config.oxxoReference === "Tu número de teléfono" ? user.phone : config.oxxoReference}
+                        </p>
                         <p className="text-[9px] font-medium text-gray-500 leading-relaxed italic px-4">
-                          Menciona este número al cajero para realizar tu depósito en efectivo.
+                          Menciona esta referencia al cajero para realizar tu depósito en efectivo.
                         </p>
                       </div>
                     )}

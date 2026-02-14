@@ -51,6 +51,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       href: "/admin/payments",
     },
     {
+      icon: <Banknote size={20} />,
+      label: "Métodos de Pago",
+      href: "/admin/payments-config",
+    },
+    {
       icon: <MapPin size={20} />,
       label: "Gestionar Sede",
       href: "/admin/venue",

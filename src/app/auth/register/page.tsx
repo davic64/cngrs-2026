@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Banknote,
   Camera,
+  CheckCircle2,
   CreditCard,
   FileText,
   Loader2,
@@ -271,6 +272,10 @@ export default function RegisterPage() {
   const [profilePreviewUrl, setProfilePreviewUrl] = React.useState<
     string | null
   >(null);
+  const [showManualEstado, setShowManualEstado] = React.useState(false);
+  const [showManualLocalidad, setShowManualLocalidad] = React.useState(false);
+  const [isDocumentVerified, setIsDocumentVerified] = React.useState(false);
+  const [ocrError, setOcrError] = React.useState<string | null>(null);
   const [config, setConfig] = React.useState({
     fullPaymentPrice: 1500,
     registrationFeePrice: 500,
@@ -359,7 +364,7 @@ export default function RegisterPage() {
     formData.genero &&
     formData.telefono &&
     formData.contactoEmergencia;
-  const isStep2Valid = isEdadValida && (!needsResponsiva || formData.documento);
+  const isStep2Valid = isEdadValida && formData.documento;
   const isStep3Valid =
     (formData.pais === "Otro" ? formData.otroPais : formData.pais) &&
     formData.estado &&
@@ -380,10 +385,9 @@ export default function RegisterPage() {
       alert("Lo sentimos, la edad permitida es de 15 a 29 años.");
       return;
     }
-    
-    // Si estamos en el paso 1 y no necesita responsiva, saltamos al 3
-    if (step === 1 && !needsResponsiva) {
-      setStep(3);
+
+    if (step === 2 && !isDocumentVerified) {
+      alert("Por favor, espera a que terminemos de verificar tu edad o sube un documento válido.");
       return;
     }
 
@@ -481,11 +485,6 @@ export default function RegisterPage() {
   };
 
   const handleBack = () => {
-    // Si estamos en el paso 3 y no necesita responsiva, volvemos al 1
-    if (step === 3 && !needsResponsiva) {
-      setStep(1);
-      return;
-    }
     setStep((prev) => prev - 1);
   };
 
@@ -497,9 +496,11 @@ export default function RegisterPage() {
     if (!file) return;
     if (field === "documento") {
       setFormData({ ...formData, documento: file });
+      setIsDocumentVerified(false); // Reiniciamos al subir uno nuevo
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
-      await verifyAgeFromDocument(file);
+      const isValid = await verifyAgeFromDocument(file);
+      if (isValid) setIsDocumentVerified(true);
     } else {
       setFormData({ ...formData, [field]: file });
       if (file.type.startsWith("image/")) {
@@ -539,6 +540,7 @@ export default function RegisterPage() {
 
   const verifyAgeFromDocument = async (file: File) => {
     setIsVerifying(true);
+    setOcrError(null);
     try {
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve) => {
@@ -549,20 +551,23 @@ export default function RegisterPage() {
       const result = await verifyDocumentAge(base64Image);
       if (result.success) {
         if (!result.isValid) {
-          alert(
-            `Lo sentimos, el sistema detectó una edad de ${result.age} años en tu identificación. El congreso es exclusivo para jóvenes de 15 a 29 años.`,
-          );
-          setFormData({ ...formData, documento: null });
-          setPreviewUrl(null);
+          const errorMsg = `Lo sentimos, detectamos una edad de ${result.age} años. El congreso es para jóvenes de 15 a 29 años.`;
+          setOcrError(errorMsg);
+          setIsDocumentVerified(false);
           return false;
         }
+        setIsDocumentVerified(true);
         return true;
       } else {
-        return true;
+        setOcrError(result.error || "No se pudo leer el documento");
+        setIsDocumentVerified(false);
+        return false;
       }
     } catch (error) {
       console.error("Error en validación OCR:", error);
-      return true;
+      setOcrError("Error de conexión con el servicio de validación");
+      setIsDocumentVerified(false);
+      return false;
     } finally {
       setIsVerifying(false);
     }
@@ -699,9 +704,19 @@ export default function RegisterPage() {
                 className="space-y-6 bg-white p-5 sm:p-8 rounded-[2rem] shadow-xl border border-gray-100"
               >
                 <div className="space-y-4">
-                  <h2 className="text-lg font-bold text-secondary uppercase tracking-tight">
-                    Documentación
-                  </h2>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                      <FileText size={20} />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-secondary uppercase tracking-tight leading-none">
+                        {needsResponsiva ? "Responsiva" : "Identificación"}
+                      </h2>
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-1">
+                        {needsResponsiva ? "Menores de 18" : "INE o Pasaporte"}
+                      </p>
+                    </div>
+                  </div>
                   <div className="relative">
                     {formData.documento ? (
                       <div className="relative w-full h-64 rounded-3xl overflow-hidden border-2 border-primary/20">
@@ -724,11 +739,57 @@ export default function RegisterPage() {
                           onClick={() => {
                             setFormData({ ...formData, documento: null });
                             setPreviewUrl(null);
+                            setIsDocumentVerified(false);
                           }}
-                          className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-full cursor-pointer"
+                          className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-full cursor-pointer z-20 shadow-lg"
                         >
                           <X className="h-4 w-4" />
                         </button>
+
+                        {/* Status Overlay */}
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/5 backdrop-blur-[2px]">
+                          {isVerifying ? (
+                            <div className="bg-white/90 p-6 rounded-[2rem] shadow-2xl flex flex-col items-center gap-3 border border-primary/20">
+                              <Loader2 className="h-10 w-10 text-primary animate-spin" />
+                              <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] animate-pulse">
+                                Analizando Documento...
+                              </p>
+                            </div>
+                          ) : isDocumentVerified ? (
+                            <motion.div 
+                              initial={{ scale: 0.5, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              className="bg-white/90 p-6 rounded-[2.5rem] shadow-2xl flex flex-col items-center gap-3 border border-green-500/30"
+                            >
+                              <div className="h-12 w-12 bg-green-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-green-200">
+                                <CheckCircle2 size={28} />
+                              </div>
+                              <p className="text-[10px] font-black text-green-600 uppercase tracking-[0.2em]">
+                                Edad Verificada
+                              </p>
+                            </motion.div>
+                          ) : (
+                            <div className="bg-white/95 p-6 rounded-[2rem] shadow-2xl flex flex-col items-center gap-3 border border-red-500/30 max-w-[90%] text-center">
+                              <AlertCircle className="h-10 w-10 text-red-500" />
+                              <p className="text-[10px] font-black text-red-600 uppercase tracking-[0.2em]">
+                                Validación Fallida
+                              </p>
+                              <p className="text-[9px] font-bold text-gray-500 leading-tight">
+                                {ocrError || "No pudimos procesar tu documento correctamente."}
+                              </p>
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="h-8 text-[8px] uppercase font-black tracking-widest border-red-100 text-red-500 mt-1"
+                                onClick={() => {
+                                  if (formData.documento) verifyAgeFromDocument(formData.documento);
+                                }}
+                              >
+                                Reintentar Análisis
+                              </Button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ) : (
                       <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-gray-200 rounded-3xl cursor-pointer hover:bg-gray-50 transition-all relative overflow-hidden">
@@ -768,7 +829,7 @@ export default function RegisterPage() {
                   </Button>
                   <Button
                     className="flex-[2] h-14 font-bold shadow-lg"
-                    disabled={!isStep2Valid || isVerifying}
+                    disabled={!isStep2Valid || isVerifying || !isDocumentVerified}
                     onClick={handleNext}
                   >
                     Siguiente
@@ -808,10 +869,18 @@ export default function RegisterPage() {
                   label="Estado / Departamento"
                   placeholder="Busca tu estado..."
                   options={filteredStates}
-                  value={formData.estado}
-                  onChange={(val) => setFormData({ ...formData, estado: val })}
+                  value={showManualEstado ? "Otro" : formData.estado}
+                  onChange={(val) => {
+                    if (val === "Otro") {
+                      setShowManualEstado(true);
+                      setFormData({ ...formData, estado: "" });
+                    } else {
+                      setShowManualEstado(false);
+                      setFormData({ ...formData, estado: val });
+                    }
+                  }}
                 />
-                {formData.estado === "Otro" && (
+                {showManualEstado && (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -819,7 +888,7 @@ export default function RegisterPage() {
                     <Input
                       label="Escribe tu Estado"
                       placeholder="Nombre de tu estado o provincia"
-                      value={formData.estado === "Otro" ? "" : formData.estado}
+                      value={formData.estado}
                       onChange={(e) =>
                         setFormData({ ...formData, estado: e.target.value })
                       }
@@ -830,12 +899,18 @@ export default function RegisterPage() {
                   label="Localidad / Sede"
                   placeholder="Busca tu ciudad o sede..."
                   options={filteredLocalities}
-                  value={formData.localidad}
-                  onChange={(val) =>
-                    setFormData({ ...formData, localidad: val })
-                  }
+                  value={showManualLocalidad ? "Otro" : formData.localidad}
+                  onChange={(val) => {
+                    if (val === "Otro") {
+                      setShowManualLocalidad(true);
+                      setFormData({ ...formData, localidad: "" });
+                    } else {
+                      setShowManualLocalidad(false);
+                      setFormData({ ...formData, localidad: val });
+                    }
+                  }}
                 />
-                {formData.localidad === "Otro" && (
+                {showManualLocalidad && (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -843,9 +918,7 @@ export default function RegisterPage() {
                     <Input
                       label="Escribe tu Localidad"
                       placeholder="Nombre de tu ciudad o sede"
-                      value={
-                        formData.localidad === "Otro" ? "" : formData.localidad
-                      }
+                      value={formData.localidad}
                       onChange={(e) =>
                         setFormData({ ...formData, localidad: e.target.value })
                       }
@@ -1316,12 +1389,12 @@ export default function RegisterPage() {
                       <p className="text-[10px] font-black uppercase tracking-widest">
                         Datos Bancarios (SPEI)
                       </p>
-                      <p className="text-xs font-bold">Banco: BBVA</p>
-                      <p className="text-xs font-bold">
-                        CLABE: 0123 4567 8901 2345 67
+                      <p className="text-xs font-bold uppercase">Banco: <span className="text-secondary">{config.bankName || "BBVA"}</span></p>
+                      <p className="text-xs font-bold uppercase">
+                        CLABE: <span className="text-secondary tracking-tighter">{config.bankCLABE || "0123 4567 8901 2345 67"}</span>
                       </p>
-                      <p className="text-xs font-bold">
-                        Nombre: JIDI Internacional A.C.
+                      <p className="text-xs font-bold uppercase">
+                        Nombre: <span className="text-primary">{config.bankHolder || "JIDI Internacional A.C."}</span>
                       </p>
                     </div>
                     <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-200 rounded-3xl cursor-pointer hover:bg-gray-50 transition-all">
@@ -1344,14 +1417,14 @@ export default function RegisterPage() {
                   <div className="space-y-4 text-center">
                     <div className="p-6 bg-amber-50 border border-amber-100 rounded-[2rem] space-y-4 text-amber-800">
                       <p className="text-[10px] font-black uppercase tracking-widest">
-                        Número de Referencia (OXXO)
+                        Referencia de Pago (OXXO)
                       </p>
                       <p className="text-4xl font-black tracking-tighter text-secondary">
-                        {formData.telefono}
+                        {config.oxxoReference === "Tu número de teléfono" ? formData.telefono : config.oxxoReference}
                       </p>
                       <p className="text-[11px] leading-relaxed font-medium">
-                        Acude a cualquier sucursal y realiza el depósito a la
-                        cuenta vinculada usando este número.
+                        Menciona esta referencia al cajero para realizar tu pago
+                        en efectivo.
                       </p>
                     </div>
                     <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-200 rounded-[2rem] cursor-pointer hover:bg-gray-50 transition-all">

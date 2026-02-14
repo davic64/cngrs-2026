@@ -2,9 +2,23 @@
 
 import vision from "@google-cloud/vision";
 
-// Configuramos el cliente
-// Nota: Google buscará automáticamente las credenciales en las variables de entorno
-const client = new vision.ImageAnnotatorClient();
+// Función para inicializar el cliente de forma segura
+function getVisionClient() {
+  const apiKey = process.env.GOOGLE_VISION_API_KEY;
+  const googleCreds = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+
+  if (apiKey) {
+    return new vision.ImageAnnotatorClient({ apiKey });
+  }
+
+  if (googleCreds && googleCreds.startsWith("AIza")) {
+    return new vision.ImageAnnotatorClient({ apiKey: googleCreds });
+  }
+
+  return new vision.ImageAnnotatorClient();
+}
+
+const client = getVisionClient();
 
 export async function verifyDocumentAge(base64Image: string) {
   try {
@@ -20,39 +34,43 @@ export async function verifyDocumentAge(base64Image: string) {
     }
 
     const fullText = detections[0].description?.toUpperCase() || "";
-    console.log("Texto detectado por Google:", fullText);
+    // console.log("Texto detectado por Google:", fullText);
 
     // 3. Lógica de búsqueda de fecha de nacimiento
-    // Buscamos patrones comunes en INE: "FECHA DE NACIMIENTO", "NACIMIENTO", o formato DD/MM/YYYY
-    const dateRegex = /(\d{2})[/\-.](\d{2})[/\-.](\d{4})/;
+    // Patrones: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
+    // También buscamos el formato de INE antigua: DD MM YYYY
+    const dateRegex = /(\d{2})[/\-.\s](\d{2})[/\-.\s](\d{4})/;
     const matches = fullText.match(new RegExp(dateRegex, "g"));
 
     if (matches) {
-      // Normalmente la primera fecha encontrada en una INE es la de nacimiento
-      // o podemos buscar la etiqueta cerca del texto
-      const birthDateStr = matches[0];
-      const [day, month, year] = birthDateStr.split(/[/\-.]/).map(Number);
+      for (const match of matches) {
+        const [day, month, year] = match.split(/[/\-.\s]/).map(Number);
 
-      const birthDate = new Date(year, month - 1, day);
-      const today = new Date();
-      let age = today.getFullYear() - birthDate.getFullYear();
-      const m = today.getMonth() - birthDate.getMonth();
+        // Validar que sea una fecha lógica (no el año de emisión o vigencia)
+        // El año de nacimiento para jóvenes de 15-29 en 2026 debe ser entre 1996 y 2011
+        if (year > 1950 && year < 2015) {
+          const birthDate = new Date(year, month - 1, day);
+          const today = new Date();
+          let age = today.getFullYear() - birthDate.getFullYear();
+          const m = today.getMonth() - birthDate.getMonth();
 
-      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
+          if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+          }
+
+          return {
+            success: true,
+            age,
+            isValid: age >= 15 && age <= 29,
+            detectedDate: match,
+          };
+        }
       }
-
-      return {
-        success: true,
-        age,
-        isValid: age >= 15 && age <= 29,
-        detectedDate: birthDateStr,
-      };
     }
 
     // Intento secundario: buscar en el CURP (posiciones 5 a 10 son YYMMDD)
-    // Ejemplo: VIVA920515... -> 15 de mayo de 1992
-    const curpRegex = /[A-Z]{4}(\d{6})[A-Z]{6}\d{2}/;
+    // Buscamos una cadena que parezca CURP (18 caracteres alfanuméricos)
+    const curpRegex = /[A-Z]{4}(\d{6})[A-Z]{6}[A-Z0-9]{2}/;
     const curpMatch = fullText.match(curpRegex);
     if (curpMatch) {
       const curpDate = curpMatch[1]; // 920515
@@ -60,8 +78,7 @@ export async function verifyDocumentAge(base64Image: string) {
       const month = parseInt(curpDate.substring(2, 4), 10) - 1;
       const day = parseInt(curpDate.substring(4, 6), 10);
 
-      // Asumimos 1900 o 2000 dependiendo del año corto
-      const year = yearShort > 25 ? 1900 + yearShort : 2000 + yearShort;
+      const year = yearShort > 26 ? 1900 + yearShort : 2000 + yearShort;
 
       const birthDate = new Date(year, month, day);
       const today = new Date();
@@ -84,13 +101,20 @@ export async function verifyDocumentAge(base64Image: string) {
     return {
       success: false,
       error:
-        "No se pudo extraer una fecha de nacimiento válida de la identificación",
+        "No pudimos encontrar tu fecha de nacimiento. Asegúrate de que la foto sea clara y se vea toda la identificación.",
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error en Google Vision Action:", error);
+    if (error.message?.includes("billing")) {
+      return {
+        success: false,
+        error: "Error de facturación en el servicio de validación.",
+      };
+    }
     return {
       success: false,
-      error: "Error al procesar la imagen con Google Vision",
+      error:
+        "No pudimos procesar la imagen. Intenta con una foto más clara o un formato diferente.",
     };
   }
 }

@@ -100,6 +100,7 @@ export function AdminLocalitiesClient({
     state: "",
     country: "México",
   });
+  const [showManualState, setShowManualState] = React.useState(false);
   const [isAdding, setIsAdding] = React.useState(false);
 
   const handleAdd = async () => {
@@ -107,6 +108,7 @@ export function AdminLocalitiesClient({
     setIsAdding(true);
     await createLocality(newLocality);
     setNewLocality({ ...newLocality, name: "", state: "" });
+    setShowManualState(false);
     setIsAdding(false);
   };
 
@@ -157,15 +159,23 @@ export function AdminLocalitiesClient({
                 label="Estado / Departamento"
                 placeholder="Busca tu estado..."
                 options={statesOptions}
-                value={newLocality.state}
-                onChange={(val) => setNewLocality({ ...newLocality, state: val })}
+                value={showManualState ? "Otro" : newLocality.state}
+                onChange={(val) => {
+                  if (val === "Otro") {
+                    setShowManualState(true);
+                    setNewLocality({ ...newLocality, state: "" });
+                  } else {
+                    setShowManualState(false);
+                    setNewLocality({ ...newLocality, state: val });
+                  }
+                }}
               />
-              {newLocality.state === "Otro" && (
+              {showManualState && (
                 <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
                   <Input
                     label="Escribe el Estado"
                     placeholder="Nombre del estado"
-                    value={newLocality.state === "Otro" ? "" : newLocality.state}
+                    value={newLocality.state}
                     onChange={(e) => setNewLocality({ ...newLocality, state: e.target.value })}
                   />
                 </motion.div>
@@ -180,7 +190,7 @@ export function AdminLocalitiesClient({
               />
               <Button
                 onClick={handleAdd}
-                disabled={isAdding || !newLocality.name || !newLocality.state || newLocality.state === "Otro"}
+                disabled={isAdding || !newLocality.name || !newLocality.state}
                 className="w-full h-12 shadow-lg shadow-primary/20 font-black uppercase text-xs tracking-widest mt-2"
               >
                 <Plus size={18} className="mr-2" />

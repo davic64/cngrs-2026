@@ -146,6 +146,10 @@ export const settings = pgTable("settings", {
   stripeFixedFee: integer("stripe_fixed_fee").default(3).notNull(),
   termsAndConditions: text("terms_and_conditions"),
   priceDeadline: timestamp("price_deadline"),
+  bankName: text("bank_name").default("BBVA"),
+  bankCLABE: text("bank_clabe").default("0123 4567 8901 2345 67"),
+  bankHolder: text("bank_holder").default("JIDI Internacional A.C."),
+  oxxoReference: text("oxxo_reference").default("Tu número de teléfono"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
