@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 interface DrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  title?: string;
+  title?: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
 }
@@ -62,12 +62,8 @@ export function Drawer({ isOpen, onClose, title, children, footer }: DrawerProps
           >
             {/* Header */}
             <div className="px-8 py-6 border-b border-gray-50 flex items-center justify-between bg-white sticky top-0 z-10">
-              <div>
-                {title && (
-                  <h2 className="text-xl font-black text-secondary uppercase tracking-tighter">
-                    {title}
-                  </h2>
-                )}
+              <div className="text-xl font-black text-secondary uppercase tracking-tighter">
+                {title}
               </div>
               <button
                 type="button"

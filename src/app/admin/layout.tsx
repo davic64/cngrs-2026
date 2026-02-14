@@ -2,6 +2,7 @@
 
 import {
   Bell,
+  Banknote,
   Building2,
   Calendar,
   CreditCard,

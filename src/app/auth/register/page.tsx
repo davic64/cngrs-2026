@@ -282,6 +282,10 @@ export default function RegisterPage() {
     stripePercentage: "3.6",
     stripeFixedFee: 3,
     termsAndConditions: "",
+    bankName: "",
+    bankCLABE: "",
+    bankHolder: "",
+    oxxoReference: "",
   });
   const [dbLocalities, setDbLocalities] = React.useState<any[]>([]);
 
