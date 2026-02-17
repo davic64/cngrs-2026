@@ -79,15 +79,13 @@ export async function uploadTemporaryFile(
 
 export async function confirmTemporaryFiles(sessionId: string) {
   try {
-    const now = new Date();
-
-    // Marcar todos los archivos de esta sesión como "confirmed"
+    // El archivo ya está en R2 en su ruta definitiva (Perfil/, Identificación/).
+    // Solo hay que eliminar el registro de seguimiento — ya no es necesario.
     await db
-      .update(temporaryFiles)
-      .set({ status: "confirmed", confirmedAt: now })
+      .delete(temporaryFiles)
       .where(eq(temporaryFiles.sessionId, sessionId));
 
-    console.log(`✅ Archivos confirmados para sesión: ${sessionId}`);
+    console.log(`✅ Archivos confirmados y tracking eliminado para sesión: ${sessionId}`);
     return { success: true };
   } catch (error) {
     console.error("Error confirming temporary files:", error);

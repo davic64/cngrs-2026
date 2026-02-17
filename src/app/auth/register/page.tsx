@@ -628,40 +628,51 @@ export default function RegisterPage() {
     setIsProcessing(true);
 
     if (formData.metodoPago === "tarjeta") {
-      // 1. Pre-subir archivos a R2 antes de ir a Stripe
-      const fileData = new FormData();
-      if (formData.fotoPerfil)
-        fileData.append("fotoPerfil", formData.fotoPerfil);
-      if (formData.documento) fileData.append("documento", formData.documento);
-      fileData.append("edad", formData.edad);
+      // 1. Reusar archivos ya subidos por saveFormAndFiles (step 7→8),
+      //    o subir de nuevo si no existen (ej. sesión restaurada).
+      const existing = loadRegText();
+      let stripeSessionId: string | undefined;
 
-      const uploadResult = await uploadRegistrationFiles(fileData);
-      if (!uploadResult.success) {
-        alert("Error al subir archivos. Intenta de nuevo.");
-        setIsProcessing(false);
-        return;
+      if (existing?.sessionId && existing?.profilePhotoUrl) {
+        // Los archivos ya fueron subidos al pasar al step 8, reutilizarlos
+        stripeSessionId = existing.sessionId;
+      } else {
+        const fileData = new FormData();
+        if (formData.fotoPerfil)
+          fileData.append("fotoPerfil", formData.fotoPerfil);
+        if (formData.documento) fileData.append("documento", formData.documento);
+        fileData.append("edad", formData.edad);
+
+        const uploadResult = await uploadRegistrationFiles(fileData);
+        if (!uploadResult.success) {
+          alert("Error al subir archivos. Intenta de nuevo.");
+          setIsProcessing(false);
+          return;
+        }
+
+        stripeSessionId = uploadResult.sessionId;
+
+        const {
+          documento: _d,
+          fotoPerfil: _f,
+          comprobantePago: _c,
+          ...textData
+        } = formData;
+        saveRegText({
+          ...textData,
+          contactoEmergencia: formData.contactoEmergencia,
+          profilePhotoUrl: uploadResult.profileUrl,
+          documentUrl: uploadResult.docUrl,
+          sessionId: uploadResult.sessionId,
+        });
       }
 
-      // 2. Guardar datos de texto + URLs de archivos en localStorage
-      const {
-        documento: _d,
-        fotoPerfil: _f,
-        comprobantePago: _c,
-        ...textData
-      } = formData;
-      saveRegText({
-        ...textData,
-        contactoEmergencia: formData.contactoEmergencia,
-        profilePhotoUrl: uploadResult.profileUrl,
-        documentUrl: uploadResult.docUrl,
-        sessionId: uploadResult.sessionId,
-      });
-
-      // 3. Redirigir a Stripe
+      // 2. Redirigir a Stripe
       const result = await createCheckoutSession(
         null,
         formData.tipoPago as "completo" | "inscripcion",
-        uploadResult.sessionId,
+        stripeSessionId,
+        `${formData.nombre} ${formData.apellido}`.trim(),
       );
 
       if (result.success && result.url) {
@@ -852,7 +863,7 @@ export default function RegisterPage() {
     }
     try {
       setCartaTemplateLoading(true);
-      const response = await fetch(cartaTemplateUrl);
+      const response = await fetch("/api/carta-responsiva");
       if (!response.ok) throw new Error("Error descargando plantilla");
 
       const blob = await response.blob();

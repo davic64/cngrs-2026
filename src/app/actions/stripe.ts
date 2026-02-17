@@ -1,8 +1,9 @@
 "use server";
 
 import Stripe from "stripe";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { payments, settings } from "@/db/schema";
+import { payments, settings, users } from "@/db/schema";
 import { uploadFile } from "@/lib/storage";
 import { revalidatePath } from "next/cache";
 
@@ -14,6 +15,7 @@ export async function createCheckoutSession(
   userId: string | null,
   type: "completo" | "inscripcion",
   sessionId?: string,
+  userName?: string,
 ) {
   try {
     if (!process.env.STRIPE_SECRET_KEY) {
@@ -53,7 +55,7 @@ export async function createCheckoutSession(
           price_data: {
             currency: "mxn",
             product_data: {
-              name: `Registro CNGRS26 - ${type === "completo" ? "Pago Total" : "Inscripción"}`,
+              name: `${userName ? `${userName} ` : ""}CNGRS26`,
               description: "Acceso al Congreso Juvenil Internacional 2026",
             },
             unit_amount: totalPrice * 100, // Stripe usa centavos
@@ -130,6 +132,11 @@ export async function createCheckoutSessionForBalance(
     // 3. Obtener URL base
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+    });
+    const userName = user ? `${user.firstName} ${user.lastName}` : "";
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
@@ -137,7 +144,7 @@ export async function createCheckoutSessionForBalance(
           price_data: {
             currency: "mxn",
             product_data: {
-              name: "Liquidación de Pago - CNGRS26",
+              name: `${userName ? `${userName} ` : ""}CNGRS26`,
               description: `Pago de saldo restante ($${amount} MXN + comisiones)`,
             },
             unit_amount: totalPrice * 100,

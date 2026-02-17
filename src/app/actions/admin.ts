@@ -433,11 +433,12 @@ export async function uploadCartaResponsivaTemplate(formData: FormData) {
     if (!file) return { success: false, error: "No file provided" };
 
     // Subir a ruta fija (sobreescribe si ya existe)
-    const url = await uploadCartaResponsivaToR2(file);
+    const uploaded = await uploadCartaResponsivaToR2(file);
+    if (!uploaded.success) return { success: false, error: "Error al subir la plantilla" };
 
     revalidatePath("/admin/dashboard");
     revalidatePath("/auth/register");
-    return { success: true, url, fileName: file.name };
+    return { success: true, url: uploaded.url, fileName: file.name };
   } catch (error) {
     console.error("Error uploading carta responsiva template:", error);
     return { success: false, error: "Error al subir la plantilla" };

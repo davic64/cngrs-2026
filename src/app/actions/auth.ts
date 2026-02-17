@@ -11,6 +11,8 @@ import {
   uploadTemporaryFile,
   confirmTemporaryFiles,
   abandonTemporaryFiles,
+  checkCartaResponsivaExists,
+  getCartaResponsivaUrl,
 } from "@/lib/storage";
 import { getAdultCompanionCount } from "@/app/actions/ocr";
 
@@ -440,24 +442,14 @@ export async function logoutUser() {
   return { success: true };
 }
 
-// Ruta fija en R2 para la plantilla de carta responsiva
-const CARTA_RESPONSIVA_PATH = "templates/carta-responsiva.pdf";
-
 export async function getCartaResponsivaTemplate() {
-  const domain = process.env.R2_PUBLIC_DOMAIN?.replace(/^https?:\/\//, "");
-
-  if (!domain) {
-    return {
-      success: false,
-      error: "Configuración de almacenamiento no disponible",
-    };
+  try {
+    const exists = await checkCartaResponsivaExists();
+    if (!exists) {
+      return { success: false, error: "Plantilla no disponible" };
+    }
+    return { success: true, templateUrl: getCartaResponsivaUrl() };
+  } catch {
+    return { success: false, error: "Error al obtener la plantilla" };
   }
-
-  const templateUrl = `https://${domain}/${CARTA_RESPONSIVA_PATH}`;
-
-  return {
-    success: true,
-    templateUrl,
-    fileName: "carta-responsiva.pdf",
-  };
 }
