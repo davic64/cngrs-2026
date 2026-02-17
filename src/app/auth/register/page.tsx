@@ -724,9 +724,10 @@ export default function RegisterPage() {
     }
     data.append("tipoPago", formData.tipoPago);
     data.append("metodoPago", formData.metodoPago);
-    // Si es sesión restaurada, usar URLs pre-subidas; si no, enviar archivos
-    if (isRestoredSession) {
-      const saved = loadRegText();
+    // Si es sesión restaurada O si ya se subieron archivos en el paso 7→8,
+    // usar URLs pre-subidas para evitar duplicar archivos en R2
+    const saved = loadRegText();
+    if (isRestoredSession || (saved?.sessionId && saved?.profilePhotoUrl)) {
       if (saved?.profilePhotoUrl)
         data.append("profilePhotoUrl", saved.profilePhotoUrl);
       if (saved?.documentUrl) data.append("documentUrl", saved.documentUrl);
