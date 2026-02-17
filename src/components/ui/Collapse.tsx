@@ -24,7 +24,7 @@ export function Collapse({
     <div
       className={cn(
         "bg-white rounded-[2rem] border border-gray-100 shadow-xl shadow-black/[0.02] overflow-hidden",
-        className
+        className,
       )}
     >
       <button
@@ -38,7 +38,7 @@ export function Collapse({
         <div
           className={cn(
             "h-8 w-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 group-hover:text-primary transition-all",
-            isOpen && "rotate-180 bg-primary/10 text-primary"
+            isOpen && "rotate-180 bg-primary/10 text-primary",
           )}
         >
           <ChevronDown size={18} />

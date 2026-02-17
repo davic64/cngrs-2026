@@ -20,9 +20,9 @@ export default async function DashboardPage() {
   }
 
   return (
-    <DashboardClient 
-      user={user} 
-      upcomingEvents={upcomingEvents} 
+    <DashboardClient
+      user={user}
+      upcomingEvents={upcomingEvents}
       config={config}
       pinnedNotifications={pinnedNotifs}
     />

@@ -14,7 +14,13 @@ interface DrawerProps {
   footer?: React.ReactNode;
 }
 
-export function Drawer({ isOpen, onClose, title, children, footer }: DrawerProps) {
+export function Drawer({
+  isOpen,
+  onClose,
+  title,
+  children,
+  footer,
+}: DrawerProps) {
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
@@ -89,6 +95,6 @@ export function Drawer({ isOpen, onClose, title, children, footer }: DrawerProps
         </div>
       )}
     </AnimatePresence>,
-    document.body
+    document.body,
   );
 }

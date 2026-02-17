@@ -3,6 +3,7 @@
 import {
   Bell,
   Calendar,
+  CreditCard,
   LayoutDashboard,
   LogOut,
   MapPin,
@@ -49,6 +50,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       href: "/dashboard/agenda",
     },
     { icon: <MapPin size={20} />, label: "Sede", href: "/dashboard/venue" },
+    {
+      icon: <CreditCard size={20} />,
+      label: "Pagos",
+      href: "/dashboard/payments",
+    },
     {
       icon: <Bell size={20} />,
       label: "Avisos",

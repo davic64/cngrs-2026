@@ -9,7 +9,11 @@ interface RichTextEditorProps {
   placeholder?: string;
 }
 
-export function RichTextEditor({ data, onChange, placeholder }: RichTextEditorProps) {
+export function RichTextEditor({
+  data,
+  onChange,
+  placeholder,
+}: RichTextEditorProps) {
   const editorRef = React.useRef<EditorJS | null>(null);
   const holderId = React.useId().replace(/:/g, "");
 
@@ -69,8 +73,8 @@ export function RichTextEditor({ data, onChange, placeholder }: RichTextEditorPr
 
   return (
     <div className="prose prose-sm max-w-none">
-      <div 
-        id={holderId} 
+      <div
+        id={holderId}
         className="min-h-[300px] bg-gray-50 border border-gray-100 rounded-2xl p-6 focus-within:border-primary/30 transition-all text-secondary"
       />
     </div>

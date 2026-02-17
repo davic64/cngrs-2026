@@ -21,7 +21,10 @@ import {
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import * as React from "react";
-import { createCheckoutSessionForBalance, uploadManualPaymentProof } from "@/app/actions/stripe";
+import {
+  createCheckoutSessionForBalance,
+  uploadManualPaymentProof,
+} from "@/app/actions/stripe";
 import { DashboardAction } from "@/components/dashboard/DashboardAction";
 import { DashboardCard } from "@/components/dashboard/DashboardCard";
 import { EventItem } from "@/components/dashboard/EventItem";
@@ -62,38 +65,55 @@ interface DashboardClientProps {
   pinnedNotifications?: any[];
 }
 
-export function DashboardClient({ 
-  user, 
-  upcomingEvents, 
+export function DashboardClient({
+  user,
+  upcomingEvents,
   config,
-  pinnedNotifications = []
+  pinnedNotifications = [],
 }: DashboardClientProps) {
   const router = useRouter();
   const [isQRModalOpen, setIsQRModalOpen] = React.useState(false);
   const [isStatusModalOpen, setIsStatusModalOpen] = React.useState(false);
   const [isProcessing, setIsProcessing] = React.useState(false);
   const [paymentFile, setPaymentFile] = React.useState<File | null>(null);
-  const [balanceMethod, setBalanceMethod] = React.useState<"tarjeta" | "transferencia" | "efectivo">("tarjeta");
-  
+  const [balanceMethod, setBalanceMethod] = React.useState<
+    "tarjeta" | "transferencia" | "efectivo"
+  >("tarjeta");
+  const [paymentMode, setPaymentMode] = React.useState<"full" | "partial">(
+    "full",
+  );
+  const [partialAmount, setPartialAmount] = React.useState("");
+
   const [isValidationPending, setIsValidationPending] = React.useState(
-    user.payments?.some((p: any) => p.status === "revision") || false
+    user.payments?.some((p: any) => p.status === "revision") || false,
   );
 
   // Calcular balance
   const totalRequired = config?.fullPaymentPrice || 1500;
-  const totalPaid = user.payments
-    ?.filter((p: any) => p.status === "completado")
-    .reduce((acc: number, p: any) => acc + p.amount, 0) || 0;
-  
+  const totalPaid =
+    user.payments
+      ?.filter((p: any) => p.status === "completado")
+      .reduce((acc: number, p: any) => acc + p.amount, 0) || 0;
+
   const balance = totalRequired - totalPaid;
   const isFullyPaid = balance <= 0;
 
   const qrRef = React.useRef<SVGSVGElement>(null);
 
+  const paymentAmount =
+    paymentMode === "full" ? balance : parseInt(partialAmount) || 0;
+
   const handleBalancePayment = async () => {
+    if (paymentAmount <= 0 || paymentAmount > balance) {
+      alert("Monto inválido");
+      return;
+    }
     setIsProcessing(true);
     if (balanceMethod === "tarjeta") {
-      const result = await createCheckoutSessionForBalance(user.id, balance);
+      const result = await createCheckoutSessionForBalance(
+        user.id,
+        paymentAmount,
+      );
       if (result.success && result.url) {
         window.location.href = result.url;
       } else {
@@ -109,8 +129,12 @@ export function DashboardClient({
       const formData = new FormData();
       formData.append("file", paymentFile);
       formData.append("method", balanceMethod);
-      
-      const result = await uploadManualPaymentProof(user.id, balance, formData);
+
+      const result = await uploadManualPaymentProof(
+        user.id,
+        paymentAmount,
+        formData,
+      );
       if (result.success) {
         alert("Comprobante enviado. El staff lo revisará pronto.");
         setIsStatusModalOpen(false);
@@ -337,7 +361,10 @@ export function DashboardClient({
                   className="bg-primary/10 border border-primary/20 p-6 rounded-[2rem] relative overflow-hidden group"
                 >
                   <div className="absolute top-4 right-6 opacity-20">
-                    <Pin size={16} className="text-primary fill-primary rotate-45" />
+                    <Pin
+                      size={16}
+                      className="text-primary fill-primary rotate-45"
+                    />
                   </div>
                   <div className="flex gap-4 items-start relative z-10">
                     <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shrink-0 shadow-lg shadow-primary/20">
@@ -351,7 +378,7 @@ export function DashboardClient({
                         {notif.message}
                       </p>
                     </div>
-                    <button 
+                    <button
                       onClick={() => router.push("/dashboard/notifications")}
                       className="h-8 w-8 rounded-lg bg-white/50 flex items-center justify-center text-primary hover:bg-white transition-colors mt-1"
                     >
@@ -397,10 +424,13 @@ export function DashboardClient({
                       Liquidación Pendiente
                     </h3>
                     <p className="text-xs font-bold text-amber-800/60 uppercase tracking-widest mt-1">
-                      Saldo por pagar: <span className="text-amber-600 font-black text-sm">${balance} MXN</span>
+                      Saldo por pagar:{" "}
+                      <span className="text-amber-600 font-black text-sm">
+                        ${balance} MXN
+                      </span>
                     </p>
                   </div>
-                  <Button 
+                  <Button
                     className="w-full sm:w-auto h-12 px-8 bg-amber-600 hover:bg-amber-700 text-white font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-amber-200"
                     onClick={() => setIsStatusModalOpen(true)}
                   >
@@ -501,7 +531,8 @@ export function DashboardClient({
                 En Revisión
               </h3>
               <p className="text-sm text-gray-500 font-medium px-4">
-                Estamos validando tu último pago. En cuanto el staff lo apruebe, se actualizará tu saldo.
+                Estamos validando tu último pago. En cuanto el staff lo apruebe,
+                se actualizará tu saldo.
               </p>
             </div>
           ) : (
@@ -512,81 +543,166 @@ export function DashboardClient({
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase text-amber-700 mb-1">
-                    Monto a Liquidar
+                    Saldo Pendiente
                   </p>
                   <p className="text-xl font-black text-amber-900 leading-none">
                     ${balance} MXN
                   </p>
                   {config?.priceDeadline && (
                     <p className="text-[9px] font-bold text-primary uppercase mt-2 tracking-widest">
-                      Vence el {new Date(config.priceDeadline).toLocaleDateString()}
+                      Vence el{" "}
+                      {new Date(config.priceDeadline).toLocaleDateString()}
                     </p>
                   )}
                 </div>
               </div>
 
+              {/* Selector de Modo de Pago */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaymentMode("full");
+                    setPartialAmount("");
+                  }}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-1 p-4 rounded-2xl border-2 transition-all",
+                    paymentMode === "full"
+                      ? "bg-primary/10 border-primary text-primary"
+                      : "bg-white border-gray-100 text-gray-400 hover:border-primary/30",
+                  )}
+                >
+                  <span className="text-[9px] font-black uppercase tracking-tighter">
+                    Liquidar Todo
+                  </span>
+                  <span className="text-sm font-black">${balance}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMode("partial")}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-1 p-4 rounded-2xl border-2 transition-all",
+                    paymentMode === "partial"
+                      ? "bg-primary/10 border-primary text-primary"
+                      : "bg-white border-gray-100 text-gray-400 hover:border-primary/30",
+                  )}
+                >
+                  <span className="text-[9px] font-black uppercase tracking-tighter">
+                    Otra Cantidad
+                  </span>
+                  <span className="text-sm font-black">Parcial</span>
+                </button>
+              </div>
+
+              {paymentMode === "partial" && (
+                <div className="animate-in fade-in slide-in-from-bottom-2">
+                  <Input
+                    label="Monto a Pagar (MXN)"
+                    type="number"
+                    placeholder="Ej. 300"
+                    value={partialAmount}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setPartialAmount(e.target.value)
+                    }
+                    min={1}
+                    max={balance}
+                  />
+                  {partialAmount &&
+                    (parseInt(partialAmount) <= 0 ||
+                      parseInt(partialAmount) > balance) && (
+                      <p className="text-[10px] text-red-500 font-bold mt-1">
+                        El monto debe ser entre $1 y ${balance}
+                      </p>
+                    )}
+                </div>
+              )}
+
               {/* Selector de Método */}
               <div className="grid grid-cols-3 gap-2">
-                {(["tarjeta", "transferencia", "efectivo"] as const).map((method) => (
-                  <button
-                    key={method}
-                    type="button"
-                    onClick={() => setBalanceMethod(method)}
-                    className={cn(
-                      "flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border-2 transition-all",
-                      balanceMethod === method
-                        ? "bg-primary/10 border-primary text-primary"
-                        : "bg-white border-gray-100 text-gray-400 hover:border-primary/30"
-                    )}
-                  >
-                    <span className="text-[9px] font-black uppercase tracking-tighter">{method}</span>
-                  </button>
-                ))}
+                {(["tarjeta", "transferencia", "efectivo"] as const).map(
+                  (method) => (
+                    <button
+                      key={method}
+                      type="button"
+                      onClick={() => setBalanceMethod(method)}
+                      className={cn(
+                        "flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border-2 transition-all",
+                        balanceMethod === method
+                          ? "bg-primary/10 border-primary text-primary"
+                          : "bg-white border-gray-100 text-gray-400 hover:border-primary/30",
+                      )}
+                    >
+                      <span className="text-[9px] font-black uppercase tracking-tighter">
+                        {method}
+                      </span>
+                    </button>
+                  ),
+                )}
               </div>
 
               {balanceMethod !== "tarjeta" ? (
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
                   <div className="p-5 bg-gray-50 rounded-[2rem] border border-gray-100 space-y-3">
-                    <p className="text-[10px] font-black text-secondary uppercase tracking-widest">Instrucciones de Pago</p>
+                    <p className="text-[10px] font-black text-secondary uppercase tracking-widest">
+                      Instrucciones de Pago
+                    </p>
                     {balanceMethod === "transferencia" ? (
                       <div className="space-y-2">
                         <div className="flex justify-between items-center border-b border-gray-200 pb-2">
-                          <span className="text-[10px] font-bold text-gray-400 uppercase">Banco</span>
-                          <span className="text-xs font-black text-secondary">{config.bankName || "BBVA"}</span>
+                          <span className="text-[10px] font-bold text-gray-400 uppercase">
+                            Banco
+                          </span>
+                          <span className="text-xs font-black text-secondary">
+                            {config.bankName || "BBVA"}
+                          </span>
                         </div>
                         <div className="flex justify-between items-center border-b border-gray-200 pb-2">
-                          <span className="text-[10px] font-bold text-gray-400 uppercase">CLABE</span>
-                          <span className="text-xs font-black text-secondary tracking-tighter">{config.bankCLABE || "0123 4567 8901 2345 67"}</span>
+                          <span className="text-[10px] font-bold text-gray-400 uppercase">
+                            CLABE
+                          </span>
+                          <span className="text-xs font-black text-secondary tracking-tighter">
+                            {config.bankCLABE || "0123 4567 8901 2345 67"}
+                          </span>
                         </div>
                         <div className="flex justify-between items-center">
-                          <span className="text-[10px] font-bold text-gray-400 uppercase">Nombre</span>
-                          <span className="text-[10px] font-black text-primary uppercase text-right leading-tight">{config.bankHolder || "JIDI Internacional A.C."}</span>
+                          <span className="text-[10px] font-bold text-gray-400 uppercase">
+                            Nombre
+                          </span>
+                          <span className="text-[10px] font-black text-primary uppercase text-right leading-tight">
+                            {config.bankHolder || "JIDI Internacional A.C."}
+                          </span>
                         </div>
                       </div>
                     ) : (
                       <div className="space-y-2 text-center py-2">
-                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Referencia de Pago (OXXO)</p>
+                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">
+                          Número de Tarjeta (OXXO)
+                        </p>
                         <p className="text-3xl font-black text-primary tracking-tighter">
-                          {config.oxxoReference === "Tu número de teléfono" ? user.phone : config.oxxoReference}
+                          {config.oxxoCardNumber || "No configurado"}
                         </p>
                         <p className="text-[9px] font-medium text-gray-500 leading-relaxed italic px-4">
-                          Menciona esta referencia al cajero para realizar tu depósito en efectivo.
+                          Deposita en efectivo a esta tarjeta en cualquier OXXO.
                         </p>
                       </div>
                     )}
                   </div>
-                  
+
                   <div className="space-y-3">
                     <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-200 rounded-[2rem] cursor-pointer hover:bg-gray-50 transition-all group">
                       <Upload className="h-6 w-6 text-primary mb-2 group-hover:-translate-y-1 transition-transform" />
                       <span className="text-[10px] font-black text-gray-400 uppercase text-center px-4">
-                        {paymentFile ? paymentFile.name : "Subir comprobante de pago"}
+                        {paymentFile
+                          ? paymentFile.name
+                          : "Subir comprobante de pago"}
                       </span>
                       <input
                         type="file"
                         className="hidden"
                         accept="image/*,application/pdf"
-                        onChange={(e) => setPaymentFile(e.target.files?.[0] || null)}
+                        onChange={(e) =>
+                          setPaymentFile(e.target.files?.[0] || null)
+                        }
                       />
                     </label>
                   </div>
@@ -599,30 +715,29 @@ export function DashboardClient({
                       Pago seguro con Stripe
                     </p>
                   </div>
-                  
-                  <div className="space-y-3">
-                    <Input
-                      label="Número de Tarjeta"
-                      placeholder="0000 0000 0000 0000"
-                    />
-                    <div className="grid grid-cols-2 gap-4">
-                      <Input label="Vencimiento" placeholder="MM/YY" />
-                      <Input label="CVV" placeholder="123" />
-                    </div>
-                  </div>
-                  
+
                   <p className="text-[10px] text-gray-400 font-medium text-center px-4 leading-relaxed italic">
-                    Al hacer clic, serás redirigido para confirmar la transacción de forma segura.
+                    Al hacer clic, serás redirigido para confirmar la
+                    transacción de forma segura.
                   </p>
                 </div>
               )}
 
               <Button
                 className="w-full h-14 font-black uppercase text-xs tracking-widest shadow-xl shadow-primary/20"
-                disabled={isProcessing || (balanceMethod !== "tarjeta" && !paymentFile)}
+                disabled={
+                  isProcessing ||
+                  (balanceMethod !== "tarjeta" && !paymentFile) ||
+                  paymentAmount <= 0 ||
+                  paymentAmount > balance
+                }
                 onClick={handleBalancePayment}
               >
-                {isProcessing ? "Procesando..." : balanceMethod === "tarjeta" ? "Liquidar con Tarjeta" : "Enviar Comprobante"}
+                {isProcessing
+                  ? "Procesando..."
+                  : balanceMethod === "tarjeta"
+                    ? `Pagar $${paymentAmount} con Tarjeta`
+                    : `Enviar Comprobante ($${paymentAmount})`}
               </Button>
             </div>
           )}

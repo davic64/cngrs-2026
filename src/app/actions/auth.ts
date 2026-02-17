@@ -6,7 +6,13 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { db } from "@/db";
 import { emergencyContacts, healthInfo, payments, users } from "@/db/schema";
-import { uploadFile } from "@/lib/storage";
+import {
+  uploadFile,
+  uploadTemporaryFile,
+  confirmTemporaryFiles,
+  abandonTemporaryFiles,
+} from "@/lib/storage";
+import { getAdultCompanionCount } from "@/app/actions/ocr";
 
 export async function loginUser(formData: FormData) {
   try {
@@ -34,7 +40,6 @@ export async function loginUser(formData: FormData) {
       path: "/",
     });
 
-    // Usamos el rol de la base de datos
     const isAdmin = user.role === "admin";
 
     return { success: true, isAdmin };
@@ -51,6 +56,17 @@ export async function registerUser(formData: FormData) {
     const phone = formData.get("telefono") as string;
     const password = formData.get("password") as string;
     const age = parseInt(formData.get("edad") as string, 10);
+
+    if (age > 29) {
+      const adultCount = await getAdultCompanionCount();
+      if (adultCount >= 50) {
+        return {
+          success: false,
+          error: "Lo sentimos, el cupo de adultos acompañantes está lleno.",
+        };
+      }
+    }
+
     const gender = formData.get("genero") as "M" | "F" | "Otro";
     const shirtSize = formData.get("tallaPlayera") as string;
 
@@ -66,23 +82,31 @@ export async function registerUser(formData: FormData) {
     const contactName = formData.get("contactoNombre") as string;
     const contactPhone = formData.get("contactoTelefono") as string;
 
-    // --- SUBIDA A CLOUDFLARE R2 ORGANIZADA ---
-    const profilePhoto = formData.get("fotoPerfil") as File;
-    const document = formData.get("documento") as File;
+    // --- ARCHIVOS: URLs PRE-SUBIDAS O SUBIDAS DIRECTAS ---
+    const profilePhotoUrl = formData.get("profilePhotoUrl") as string;
+    const documentUrl = formData.get("documentUrl") as string;
     const paymentProof = formData.get("comprobantePago") as File;
+    const sessionId = formData.get("sessionId") as string | null;
 
-    let profileUrl = "";
-    let docUrl = "";
+    let profileUrl = profilePhotoUrl || "";
+    let docUrl = documentUrl || "";
     let proofUrl = "";
 
-    if (profilePhoto && profilePhoto.size > 0) {
-      profileUrl = await uploadFile(profilePhoto, "Fotos");
+    // Si no hay URLs pre-subidas, subir archivos directamente
+    // (para compatibilidad con pagos transfer/efectivo)
+    if (!profilePhotoUrl) {
+      const profilePhoto = formData.get("fotoPerfil") as File;
+      if (profilePhoto && profilePhoto.size > 0) {
+        profileUrl = await uploadFile(profilePhoto, "Fotos");
+      }
     }
 
-    if (document && document.size > 0) {
-      // Si tiene 15-17 años, lo guardamos en Carta Responsiva, si no, en INE
-      const folderName = age >= 15 && age <= 17 ? "Carta Responsiva" : "INE";
-      docUrl = await uploadFile(document, folderName);
+    if (!documentUrl) {
+      const document = formData.get("documento") as File;
+      if (document && document.size > 0) {
+        const folderName = age >= 15 && age <= 17 ? "Carta Responsiva" : "INE";
+        docUrl = await uploadFile(document, folderName);
+      }
     }
 
     if (paymentProof && paymentProof.size > 0) {
@@ -94,12 +118,13 @@ export async function registerUser(formData: FormData) {
       | "tarjeta"
       | "transferencia"
       | "efectivo";
-    const amount = tipoPago === "completo" ? 1500 : 500;
+    const skipCookie = formData.get("skipCookie") === "true";
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = await db.transaction(async (tx) => {
-      const [user] = await tx
+    let newUser;
+    try {
+      const [user] = await db
         .insert(users)
         .values({
           firstName,
@@ -112,22 +137,21 @@ export async function registerUser(formData: FormData) {
           country,
           state,
           locality,
-          registrationStatus:
-            tipoPago === "completo" && metodoPago === "tarjeta"
-              ? "completado"
-              : "pendiente",
+          registrationStatus: "pendiente",
           profilePhotoUrl: profileUrl,
           documentUrl: docUrl,
         })
         .returning();
 
-      await tx.insert(emergencyContacts).values({
+      newUser = user;
+
+      await db.insert(emergencyContacts).values({
         userId: user.id,
         name: contactName,
         phone: contactPhone,
       });
 
-      await tx.insert(healthInfo).values({
+      await db.insert(healthInfo).values({
         userId: user.id,
         allergies,
         conditions,
@@ -135,26 +159,46 @@ export async function registerUser(formData: FormData) {
         dosageFrequency,
       });
 
-      await tx.insert(payments).values({
-        userId: user.id,
-        amount,
-        type: tipoPago,
-        method: metodoPago,
-        status: metodoPago === "tarjeta" ? "completado" : "revision",
-        proofUrl: proofUrl,
+      // Solo crear registro de pago para transfer/efectivo con comprobante
+      if (metodoPago !== "tarjeta" && proofUrl) {
+        const config = await db.query.settings.findFirst();
+        const amount =
+          tipoPago === "completo"
+            ? config?.fullPaymentPrice || 1500
+            : config?.registrationFeePrice || 500;
+
+        await db.insert(payments).values({
+          userId: user.id,
+          amount,
+          type: tipoPago,
+          method: metodoPago,
+          status: "revision",
+          proofUrl: proofUrl,
+        });
+
+        // Confirmar archivos temporales si pago no es tarjeta (transfer/efectivo)
+        if (sessionId) {
+          await confirmTemporaryFiles(sessionId);
+        }
+      }
+    } catch (dbError) {
+      if (newUser) {
+        await db.delete(users).where(eq(users.id, newUser.id));
+      }
+      throw dbError;
+    }
+
+    // Para tarjeta: no settear cookie (se hace después de verificar pago)
+    if (!skipCookie) {
+      const cookieStore = await cookies();
+      cookieStore.set("user_session", newUser.id, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 7,
+        path: "/",
       });
-
-      return user;
-    });
-
-    const cookieStore = await cookies();
-    cookieStore.set("user_session", newUser.id, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7,
-      path: "/",
-    });
+    }
 
     revalidatePath("/admin/users");
     return { success: true, userId: newUser.id };
@@ -167,6 +211,73 @@ export async function registerUser(formData: FormData) {
       };
     }
     return { success: false, error: "Error interno al procesar el registro" };
+  }
+}
+
+// Settear cookie de sesión para un usuario ya registrado (post-Stripe)
+export async function setRegistrationSession(userId: string) {
+  try {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+    });
+    if (!user) return { success: false, error: "Usuario no encontrado" };
+
+    const cookieStore = await cookies();
+    cookieStore.set("user_session", userId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 7,
+      path: "/",
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error al crear sesión:", error);
+    return { success: false, error: "Error al crear sesión" };
+  }
+}
+
+// Subir comprobante de pago para usuario que regresa (transfer/efectivo)
+export async function submitRegistrationProof(
+  userId: string,
+  amount: number,
+  formData: FormData,
+) {
+  try {
+    const file = formData.get("file") as File;
+    const method = formData.get("method") as "transferencia" | "efectivo";
+    const type = formData.get("type") as string;
+
+    if (!file) return { success: false, error: "No se encontró el archivo" };
+
+    const url = await uploadFile(file, "Pagos");
+
+    await db.insert(payments).values({
+      userId,
+      amount,
+      type: type || "inscripcion",
+      method,
+      status: "revision",
+      proofUrl: url,
+    });
+
+    // Settear cookie de sesión
+    const cookieStore = await cookies();
+    cookieStore.set("user_session", userId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 7,
+      path: "/",
+    });
+
+    revalidatePath("/admin/payments");
+    revalidatePath("/dashboard");
+    return { success: true };
+  } catch (error) {
+    console.error("Error al subir comprobante:", error);
+    return { success: false, error: "No se pudo procesar el comprobante" };
   }
 }
 
@@ -203,9 +314,124 @@ export async function getSessionUser() {
   }
 }
 
+export async function uploadRegistrationFiles(formData: FormData) {
+  try {
+    const fotoPerfil = formData.get("fotoPerfil") as File | null;
+    const documento = formData.get("documento") as File | null;
+    const edad = formData.get("edad") as string;
+
+    // Generar sessionId único para este intento de registro
+    const sessionId = `reg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    let profileUrl = "";
+    let docUrl = "";
+
+    // Subir foto de perfil si existe
+    if (fotoPerfil && fotoPerfil.size > 0) {
+      const result = await uploadTemporaryFile(
+        fotoPerfil,
+        sessionId,
+        "fotoPerfil",
+      );
+      if (result.success) {
+        profileUrl = result.url;
+      } else {
+        return {
+          success: false,
+          error: "Error al subir foto de perfil",
+        };
+      }
+    }
+
+    // Subir documento si existe
+    if (documento && documento.size > 0) {
+      const result = await uploadTemporaryFile(
+        documento,
+        sessionId,
+        "documento",
+      );
+      if (result.success) {
+        docUrl = result.url;
+      } else {
+        // Si falla la segunda subida, abandonar ambos archivos
+        await abandonTemporaryFiles(sessionId);
+        return {
+          success: false,
+          error: "Error al subir documento",
+        };
+      }
+    }
+
+    // Guardar sessionId en localStorage del cliente (se envía en la próxima request)
+    // Esto lo maneja el cliente con el campo sessionId devuelto
+    return {
+      success: true,
+      profileUrl,
+      docUrl,
+      sessionId, // El cliente lo almacena para confirmar después
+    };
+  } catch (error) {
+    console.error("Error uploading registration files:", error);
+    return {
+      success: false,
+      error: "Error al procesar los archivos",
+    };
+  }
+}
+
+// Confirmar que los archivos temporales se usaron exitosamente (post-Stripe)
+export async function confirmRegistrationFiles(sessionId: string) {
+  try {
+    const result = await confirmTemporaryFiles(sessionId);
+    if (result.success) {
+      console.log(`✅ Archivos de sesión ${sessionId} confirmados`);
+    }
+    return result;
+  } catch (error) {
+    console.error("Error confirming registration files:", error);
+    return { success: false };
+  }
+}
+
+// Limpiar archivos temporales si el usuario cancela el registro
+export async function cleanupRegistrationFiles(sessionId: string) {
+  try {
+    const result = await abandonTemporaryFiles(sessionId);
+    if (result.success) {
+      console.log(`🗑️ Archivos temporales de sesión ${sessionId} eliminados`);
+    }
+    return result;
+  } catch (error) {
+    console.error("Error cleaning up registration files:", error);
+    return { success: false };
+  }
+}
+
 export async function logoutUser() {
   const cookieStore = await cookies();
   cookieStore.delete("user_session");
   revalidatePath("/");
   return { success: true };
+}
+
+// Ruta fija en R2 para la plantilla de carta responsiva
+const CARTA_RESPONSIVA_PATH = "templates/carta-responsiva.pdf";
+
+export async function getCartaResponsivaTemplate() {
+  const domain = process.env.R2_PUBLIC_DOMAIN?.replace(/^https?:\/\//, "");
+
+  if (!domain) {
+    return {
+      success: false,
+      error: "Configuración de almacenamiento no disponible",
+    };
+  }
+
+  const templateUrl = `https://${domain}/${CARTA_RESPONSIVA_PATH}`;
+
+  return {
+    success: true,
+    templateUrl,
+    fileName: "carta-responsiva.pdf",
+  };
 }

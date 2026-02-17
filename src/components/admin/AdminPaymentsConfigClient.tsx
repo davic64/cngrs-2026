@@ -14,13 +14,14 @@ export function AdminPaymentsConfigClient({ config }: { config: any }) {
     bankCLABE: config.bankCLABE || "0123 4567 8901 2345 67",
     bankHolder: config.bankHolder || "JIDI Internacional A.C.",
     oxxoReference: config.oxxoReference || "Tu número de teléfono",
+    oxxoCardNumber: config.oxxoCardNumber || "",
     // We need to send all required fields to updateSettings
     fullPaymentPrice: config.fullPaymentPrice,
     registrationFeePrice: config.registrationFeePrice,
     stripePercentage: config.stripePercentage,
     stripeFixedFee: config.stripeFixedFee,
   });
-  
+
   const [isSaving, setIsSaving] = React.useState(false);
 
   const handleSave = async () => {
@@ -50,42 +51,51 @@ export function AdminPaymentsConfigClient({ config }: { config: any }) {
           <DashboardCard title="Datos para Transferencia (SPEI)">
             <div className="space-y-6">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-relaxed">
-                Estos datos se mostrarán a los asistentes que elijan pagar vía transferencia bancaria.
+                Estos datos se mostrarán a los asistentes que elijan pagar vía
+                transferencia bancaria.
               </p>
-              
+
               <Input
                 label="Nombre del Banco"
                 value={formData.bankName}
-                onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, bankName: e.target.value })
+                }
               />
-              
+
               <Input
                 label="CLABE Interbancaria"
                 value={formData.bankCLABE}
-                onChange={(e) => setFormData({ ...formData, bankCLABE: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, bankCLABE: e.target.value })
+                }
               />
-              
+
               <Input
                 label="Nombre del Titular"
                 value={formData.bankHolder}
-                onChange={(e) => setFormData({ ...formData, bankHolder: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, bankHolder: e.target.value })
+                }
               />
             </div>
           </DashboardCard>
         </div>
 
         <div className="space-y-8">
-          <DashboardCard title="Referencia para Pago en Efectivo">
+          <DashboardCard title="Pago en Efectivo (OXXO)">
             <div className="space-y-6">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-relaxed">
-                Define qué referencia deben dar los usuarios al pagar en efectivo (OXXO/Staff).
+                Número de tarjeta donde los usuarios depositarán en OXXO.
               </p>
-              
+
               <Input
-                label="Instrucción de Referencia"
-                placeholder="Ej. Tu número de teléfono"
-                value={formData.oxxoReference}
-                onChange={(e) => setFormData({ ...formData, oxxoReference: e.target.value })}
+                label="Número de Tarjeta"
+                placeholder="0000 0000 0000 0000"
+                value={formData.oxxoCardNumber}
+                onChange={(e) =>
+                  setFormData({ ...formData, oxxoCardNumber: e.target.value })
+                }
               />
 
               <div className="p-6 bg-amber-50 rounded-[2rem] border border-amber-100 flex items-center gap-4">
@@ -93,9 +103,11 @@ export function AdminPaymentsConfigClient({ config }: { config: any }) {
                   <Banknote size={24} />
                 </div>
                 <div>
-                  <p className="text-[10px] font-black uppercase text-amber-700">Vista previa para el usuario:</p>
-                  <p className="text-lg font-black text-secondary mt-1 uppercase tracking-tighter">
-                    Referencia: <span className="text-primary">{formData.oxxoReference}</span>
+                  <p className="text-[10px] font-black uppercase text-amber-700">
+                    Vista previa para el usuario:
+                  </p>
+                  <p className="text-lg font-black text-secondary mt-1 tracking-tighter">
+                    {formData.oxxoCardNumber || "Sin configurar"}
                   </p>
                 </div>
               </div>

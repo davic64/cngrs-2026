@@ -22,7 +22,9 @@ export default async function VenuePage() {
   // Parse services from DB or use defaults
   let services = [];
   try {
-    services = (venue as any).services ? JSON.parse((venue as any).services) : [];
+    services = (venue as any).services
+      ? JSON.parse((venue as any).services)
+      : [];
   } catch (e) {
     services = [];
   }

@@ -4,9 +4,10 @@ import Stripe from "stripe";
 import { db } from "@/db";
 import { users, payments } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { confirmTemporaryFiles } from "@/lib/storage";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-01-27.acacia" as any,
+  apiVersion: "2024-12-18.acacia" as any,
 });
 
 export async function POST(req: Request) {
@@ -31,11 +32,15 @@ export async function POST(req: Request) {
     const userId = session.metadata?.userId;
     const paymentType = session.metadata?.paymentType;
 
-    if (userId) {
-      // 1. Registrar el pago en la tabla de pagos PRIMERO
+    if (userId && userId !== "registration_pending") {
+      // 1. Registrar el pago (usar baseAmount del metadata, sin comisiones)
+      const baseAmount = session.metadata?.baseAmount
+        ? parseInt(session.metadata.baseAmount, 10)
+        : (session.amount_total || 0) / 100;
+
       await db.insert(payments).values({
         userId: userId,
-        amount: (session.amount_total || 0) / 100, // De centavos a pesos
+        amount: baseAmount,
         type: paymentType || "completo",
         method: "tarjeta",
         status: "completado",
@@ -43,10 +48,10 @@ export async function POST(req: Request) {
 
       // 2. Calcular total pagado acumulado
       const userPayments = await db.query.payments.findMany({
-        where: (payments, { and, eq }) => 
-          and(eq(payments.userId, userId), eq(payments.status, "completado"))
+        where: (payments, { and, eq }) =>
+          and(eq(payments.userId, userId), eq(payments.status, "completado")),
       });
-      
+
       const totalPaid = userPayments.reduce((acc, p) => acc + p.amount, 0);
 
       // 3. Obtener meta de settings
@@ -57,11 +62,23 @@ export async function POST(req: Request) {
       await db
         .update(users)
         .set({
-          registrationStatus: totalPaid >= requiredAmount ? "completado" : "parcial",
+          registrationStatus:
+            totalPaid >= requiredAmount ? "completado" : "parcial",
         })
         .where(eq(users.id, userId));
 
-      console.log(`✅ Pago procesado para el usuario ${userId}. Total: ${totalPaid}/${requiredAmount}`);
+      // 5. Confirmar archivos temporales del cliente si los hay
+      const sessionId = session.metadata?.sessionId;
+      if (sessionId) {
+        await confirmTemporaryFiles(sessionId);
+        console.log(
+          `✅ Archivos temporales confirmados para sesión: ${sessionId}`,
+        );
+      }
+
+      console.log(
+        `✅ Pago procesado para el usuario ${userId}. Total: ${totalPaid}/${requiredAmount}`,
+      );
     }
   }
 

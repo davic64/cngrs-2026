@@ -1,6 +1,19 @@
 "use server";
 
 import vision from "@google-cloud/vision";
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { gt, sql } from "drizzle-orm";
+
+const ADULT_COMPANION_LIMIT = 50;
+
+export async function getAdultCompanionCount(): Promise<number> {
+  const [result] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(users)
+    .where(gt(users.age, 29));
+  return Number(result.count);
+}
 
 // Función para inicializar el cliente de forma segura
 function getVisionClient() {
@@ -58,10 +71,22 @@ export async function verifyDocumentAge(base64Image: string) {
             age--;
           }
 
+          if (age > 29) {
+            const adultCount = await getAdultCompanionCount();
+            return {
+              success: true,
+              age,
+              isValid: adultCount < ADULT_COMPANION_LIMIT,
+              isAdultCompanion: true,
+              spotsLeft: Math.max(0, ADULT_COMPANION_LIMIT - adultCount),
+              detectedDate: match,
+            };
+          }
+
           return {
             success: true,
             age,
-            isValid: age >= 15 && age <= 29,
+            isValid: age >= 15,
             detectedDate: match,
           };
         }
@@ -90,10 +115,22 @@ export async function verifyDocumentAge(base64Image: string) {
         age--;
       }
 
+      if (age > 29) {
+        const adultCount = await getAdultCompanionCount();
+        return {
+          success: true,
+          age,
+          isValid: adultCount < ADULT_COMPANION_LIMIT,
+          isAdultCompanion: true,
+          spotsLeft: Math.max(0, ADULT_COMPANION_LIMIT - adultCount),
+          detectedDate: `${day}/${month + 1}/${year}`,
+        };
+      }
+
       return {
         success: true,
         age,
-        isValid: age >= 15 && age <= 29,
+        isValid: age >= 15,
         detectedDate: `${day}/${month + 1}/${year}`,
       };
     }

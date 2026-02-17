@@ -97,12 +97,16 @@ export function AdminVenueClient({ initialVenue }: { initialVenue: any }) {
               <Input
                 label="Dirección Completa"
                 value={venue.address}
-                onChange={(e) => setVenue({ ...venue, address: e.target.value })}
+                onChange={(e) =>
+                  setVenue({ ...venue, address: e.target.value })
+                }
               />
               <Input
                 label="Google Maps URL"
                 value={venue.mapsUrl}
-                onChange={(e) => setVenue({ ...venue, mapsUrl: e.target.value })}
+                onChange={(e) =>
+                  setVenue({ ...venue, mapsUrl: e.target.value })
+                }
               />
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">

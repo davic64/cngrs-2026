@@ -1,29 +1,10 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Clock, MapPin, Search, User } from "lucide-react";
+import { Clock, MapPin, User } from "lucide-react";
 import * as React from "react";
-import { DashboardCard } from "@/components/dashboard/DashboardCard";
 
-// Components
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/utils";
-
-const DAYS = [
-  { id: "1", label: "Jue 12", full: "Jueves 12 de Febrero" },
-  { id: "2", label: "Vie 13", full: "Viernes 13 de Febrero" },
-  { id: "3", label: "Sab 14", full: "Sábado 14 de Febrero" },
-  { id: "4", label: "Dom 15", full: "Domingo 15 de Febrero" },
-];
-
-const CATEGORIES = [
-  { value: "all", label: "Todas las áreas" },
-  { value: "magistral", label: "Magistrales" },
-  { value: "taller", label: "Talleres" },
-  { value: "social", label: "Evento Social" },
-];
 
 // Animation Variants
 const containerVariants = {
@@ -43,16 +24,28 @@ const itemVariants = {
   },
 };
 
-interface AgendaClientProps {
-  initialEvents: any[];
+interface AgendaDay {
+  id: number;
+  label: string;
+  date: string;
+  sortOrder: number;
 }
 
-export function AgendaClient({ initialEvents }: AgendaClientProps) {
-  const [selectedDay, setSelectedDay] = React.useState("1");
+interface AgendaClientProps {
+  initialEvents: any[];
+  days: AgendaDay[];
+}
+
+export function AgendaClient({ initialEvents, days }: AgendaClientProps) {
+  const [selectedDay, setSelectedDay] = React.useState(
+    days.length > 0 ? days[0].id.toString() : "",
+  );
 
   const filteredEvents = initialEvents.filter((event) => {
     return event.dayId === selectedDay;
   });
+
+  const currentDay = days.find((d) => d.id.toString() === selectedDay);
 
   return (
     <div className="w-full max-w-6xl mx-auto flex flex-col p-4 sm:p-8 pb-32 md:pb-12">
@@ -65,64 +58,75 @@ export function AgendaClient({ initialEvents }: AgendaClientProps) {
         </h1>
       </header>
 
-      <div className="flex justify-center md:justify-start gap-3 mb-8 overflow-x-auto pb-8 -mx-4 px-4 no-scrollbar">
-        {DAYS.map((day) => (
-          <button
-            key={day.id}
-            type="button"
-            onClick={() => setSelectedDay(day.id)}
-            className={cn(
-              "flex flex-col items-center justify-center min-w-[100px] h-20 rounded-[1.5rem] border-2 transition-all cursor-pointer",
-              selectedDay === day.id
-                ? "bg-secondary border-secondary text-white shadow-xl shadow-secondary/20 scale-105"
-                : "bg-white border-gray-100 text-gray-400 hover:border-primary/30",
-            )}
-          >
-            <span className="text-[10px] font-black uppercase tracking-widest">
-              {day.label.split(" ")[0]}
-            </span>
-            <span className="text-xl font-black tracking-tighter">
-              {day.label.split(" ")[1]}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      <div className="space-y-6">
-        <div className="flex items-center justify-between mb-4 px-2">
-          <h2 className="text-sm font-black text-secondary uppercase tracking-[0.15em]">
-            {DAYS.find((d) => d.id === selectedDay)?.full}
-          </h2>
-          <span className="text-[10px] font-black text-primary uppercase bg-primary/10 px-3 py-1 rounded-full">
-            {filteredEvents.length} Eventos
-          </span>
+      {days.length === 0 ? (
+        <div className="bg-white rounded-[2.5rem] p-16 text-center border border-gray-100 shadow-sm flex flex-col items-center">
+          <Clock size={40} className="text-gray-100 mb-4" />
+          <p className="font-black text-secondary uppercase tracking-tighter">
+            La agenda aún no está disponible
+          </p>
         </div>
+      ) : (
+        <>
+          <div className="flex justify-center md:justify-start gap-3 mb-8 overflow-x-auto pb-8 -mx-4 px-4 no-scrollbar">
+            {days.map((day) => (
+              <button
+                key={day.id}
+                type="button"
+                onClick={() => setSelectedDay(day.id.toString())}
+                className={cn(
+                  "flex flex-col items-center justify-center min-w-[100px] h-20 rounded-[1.5rem] border-2 transition-all cursor-pointer",
+                  selectedDay === day.id.toString()
+                    ? "bg-secondary border-secondary text-white shadow-xl shadow-secondary/20 scale-105"
+                    : "bg-white border-gray-100 text-gray-400 hover:border-primary/30",
+                )}
+              >
+                <span className="text-[10px] font-black uppercase tracking-widest">
+                  {day.label}
+                </span>
+                <span className="text-sm font-black tracking-tighter">
+                  {day.date}
+                </span>
+              </button>
+            ))}
+          </div>
 
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={selectedDay}
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-            className="grid grid-cols-1 md:grid-cols-2 gap-4"
-          >
-            {filteredEvents.length > 0 ? (
-              filteredEvents.map((event) => (
-                <motion.div key={event.id} variants={itemVariants} layout>
-                  <EventCard {...event} />
-                </motion.div>
-              ))
-            ) : (
-              <div className="col-span-full bg-white rounded-[2.5rem] p-16 text-center border border-gray-100 shadow-sm flex flex-col items-center">
-                <Clock size={40} className="text-gray-100 mb-4" />
-                <p className="font-black text-secondary uppercase tracking-tighter">
-                  Sin actividades programadas para hoy
-                </p>
-              </div>
-            )}
-          </motion.div>
-        </AnimatePresence>
-      </div>
+          <div className="space-y-6">
+            <div className="flex items-center justify-between mb-4 px-2">
+              <h2 className="text-sm font-black text-secondary uppercase tracking-[0.15em]">
+                {currentDay ? `${currentDay.label} — ${currentDay.date}` : ""}
+              </h2>
+              <span className="text-[10px] font-black text-primary uppercase bg-primary/10 px-3 py-1 rounded-full">
+                {filteredEvents.length} Eventos
+              </span>
+            </div>
+
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={selectedDay}
+                variants={containerVariants}
+                initial="hidden"
+                animate="visible"
+                className="grid grid-cols-1 md:grid-cols-2 gap-4"
+              >
+                {filteredEvents.length > 0 ? (
+                  filteredEvents.map((event) => (
+                    <motion.div key={event.id} variants={itemVariants} layout>
+                      <EventCard {...event} />
+                    </motion.div>
+                  ))
+                ) : (
+                  <div className="col-span-full bg-white rounded-[2.5rem] p-16 text-center border border-gray-100 shadow-sm flex flex-col items-center">
+                    <Clock size={40} className="text-gray-100 mb-4" />
+                    <p className="font-black text-secondary uppercase tracking-tighter">
+                      Sin actividades programadas para hoy
+                    </p>
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   LogOut,
   MapPin,
+  MessageCircle,
   Users,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -70,6 +71,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       icon: <Bell size={20} />,
       label: "Enviar Avisos",
       href: "/admin/notifications",
+    },
+    {
+      icon: <MessageCircle size={20} />,
+      label: "Soporte",
+      href: "/admin/soporte",
     },
   ];
 

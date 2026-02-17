@@ -81,7 +81,9 @@ export function AdminDashboardClient({
     setIsSaving(true);
     const result = await updateSettings({
       ...prices,
-      priceDeadline: prices.priceDeadline ? new Date(prices.priceDeadline) : null,
+      priceDeadline: prices.priceDeadline
+        ? new Date(prices.priceDeadline)
+        : null,
     });
     if (result.success) alert("Configuración actualizada correctamente");
     setIsSaving(false);
@@ -285,12 +287,15 @@ export function AdminDashboardClient({
           <Collapse title="Términos y Condiciones">
             <div className="space-y-6">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-relaxed">
-                Edita los términos que aparecerán en el registro. Utiliza el editor para dar formato a los puntos legales.
+                Edita los términos que aparecerán en el registro. Utiliza el
+                editor para dar formato a los puntos legales.
               </p>
-              
-              <RichTextEditor 
+
+              <RichTextEditor
                 data={prices.termsAndConditions}
-                onChange={(val) => setPrices({ ...prices, termsAndConditions: val })}
+                onChange={(val) =>
+                  setPrices({ ...prices, termsAndConditions: val })
+                }
               />
 
               <Button

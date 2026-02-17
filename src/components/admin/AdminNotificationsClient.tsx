@@ -125,7 +125,7 @@ export function AdminNotificationsClient({
               </div>
 
               <div className="bg-gray-50 p-4 rounded-xl">
-                <Checkbox 
+                <Checkbox
                   label="Fijar Aviso (Aparecerá destacado en el dashboard)"
                   checked={isPinned}
                   onChange={(e) => setIsPinned(e.target.checked)}

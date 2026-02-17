@@ -10,7 +10,11 @@ import {
   Upload,
 } from "lucide-react";
 import * as React from "react";
-import { deleteUser, updateUserDetails, updateUserDocument } from "@/app/actions/admin";
+import {
+  deleteUser,
+  updateUserDetails,
+  updateUserDocument,
+} from "@/app/actions/admin";
 import { DashboardCard } from "@/components/dashboard/DashboardCard";
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
@@ -101,7 +105,7 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
                   Teléfono
                 </th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                  Estatus
+                  País
                 </th>
                 <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">
                   Acciones
@@ -138,15 +142,8 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
                     {user.phone}
                   </td>
                   <td className="px-6 py-4">
-                    <span
-                      className={cn(
-                        "text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md",
-                        user.registrationStatus === "completado"
-                          ? "bg-green-50 text-green-600"
-                          : "bg-amber-50 text-amber-600",
-                      )}
-                    >
-                      {user.registrationStatus}
+                    <span className="text-[10px] font-black text-secondary uppercase tracking-widest bg-gray-100 px-2.5 py-1 rounded-md">
+                      {user.country}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
@@ -166,8 +163,8 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
       </DashboardCard>
 
       {/* USER DETAILS DRAWER */}
-      <Drawer 
-        isOpen={!!selectedUser} 
+      <Drawer
+        isOpen={!!selectedUser}
         onClose={() => setSelectedUser(null)}
         title={
           <span className="uppercase tracking-tighter">
@@ -180,29 +177,13 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
               <div className="flex gap-3 w-full">
                 <Button
                   variant="outline"
-                  className="flex-1 border-green-200 text-green-600 hover:bg-green-50 rounded-2xl h-12 font-black uppercase text-[10px] tracking-widest transition-all"
-                  onClick={() => handleUpdateStatus("completado")}
-                >
-                  <CheckCircle2 size={16} className="mr-2" /> Validar
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1 border-amber-200 text-amber-600 hover:bg-amber-50 rounded-2xl h-12 font-black uppercase text-[10px] tracking-widest transition-all"
-                  onClick={() => handleUpdateStatus("pendiente")}
-                >
-                  <AlertCircle size={16} className="mr-2" /> Suspender
-                </Button>
-              </div>
-              <div className="flex gap-3 w-full">
-                <Button
-                  variant="outline"
                   className="flex-1 border-red-100 text-red-500 hover:bg-red-50 rounded-2xl h-12 font-black uppercase text-[10px] tracking-widest transition-all"
                   onClick={() => handleDelete(selectedUser.id)}
                 >
-                  <Trash2 size={16} className="mr-2" /> Eliminar
+                  <Trash2 size={16} className="mr-2" /> Eliminar Asistente
                 </Button>
-                <Button 
-                  className="flex-[2] rounded-2xl h-12 font-black uppercase text-[10px] tracking-widest shadow-lg shadow-primary/20" 
+                <Button
+                  className="flex-[2] rounded-2xl h-12 font-black uppercase text-[10px] tracking-widest shadow-lg shadow-primary/20"
                   onClick={() => setSelectedUser(null)}
                 >
                   Cerrar Expediente
@@ -236,10 +217,14 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
                     </div>
                   )}
                 </div>
-                <div className={cn(
-                  "absolute -bottom-2 -right-2 h-12 w-12 rounded-2xl border-4 border-white shadow-lg flex items-center justify-center",
-                  selectedUser.registrationStatus === "completado" ? "bg-green-500" : "bg-amber-500"
-                )}>
+                <div
+                  className={cn(
+                    "absolute -bottom-2 -right-2 h-12 w-12 rounded-2xl border-4 border-white shadow-lg flex items-center justify-center",
+                    selectedUser.registrationStatus === "completado"
+                      ? "bg-green-500"
+                      : "bg-amber-500",
+                  )}
+                >
                   {selectedUser.registrationStatus === "completado" ? (
                     <CheckCircle2 size={24} className="text-white" />
                   ) : (
@@ -260,7 +245,11 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
                     Talla {selectedUser.shirtSize}
                   </span>
                   <span className="text-[10px] font-black uppercase tracking-widest px-4 py-1.5 bg-white border border-gray-100 rounded-xl shadow-sm text-gray-500">
-                    {selectedUser.gender === "M" ? "Masculino" : selectedUser.gender === "F" ? "Femenino" : "Otro"}
+                    {selectedUser.gender === "M"
+                      ? "Masculino"
+                      : selectedUser.gender === "F"
+                        ? "Femenino"
+                        : "Otro"}
                   </span>
                 </div>
               </div>
@@ -276,7 +265,11 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
                 <div className="bg-white border border-gray-100 rounded-[2rem] p-6 grid grid-cols-2 gap-6 shadow-sm">
                   <InfoItem label="País" value={selectedUser.country} />
                   <InfoItem label="Estado / Depto" value={selectedUser.state} />
-                  <InfoItem label="Localidad" value={selectedUser.locality} className="col-span-2" />
+                  <InfoItem
+                    label="Localidad"
+                    value={selectedUser.locality}
+                    className="col-span-2"
+                  />
                 </div>
               </div>
 
@@ -287,20 +280,26 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
                 </h4>
                 <div className="bg-white border border-gray-100 rounded-[2rem] p-6 space-y-6 shadow-sm">
                   <div className="grid grid-cols-2 gap-6">
-                    <InfoItem 
-                      label="Contacto Emergencia" 
-                      value={selectedUser.emergencyContact?.name || "No registrado"} 
+                    <InfoItem
+                      label="Contacto Emergencia"
+                      value={
+                        selectedUser.emergencyContact?.name || "No registrado"
+                      }
                       subValue={selectedUser.emergencyContact?.phone}
                     />
-                    <InfoItem 
-                      label="Alergias / Padecimientos" 
-                      value={selectedUser.healthInfo?.allergies || "Ninguna"} 
-                      subValue={selectedUser.healthInfo?.conditions !== "Ninguna" ? selectedUser.healthInfo?.conditions : undefined}
+                    <InfoItem
+                      label="Alergias / Padecimientos"
+                      value={selectedUser.healthInfo?.allergies || "Ninguna"}
+                      subValue={
+                        selectedUser.healthInfo?.conditions !== "Ninguna"
+                          ? selectedUser.healthInfo?.conditions
+                          : undefined
+                      }
                     />
                   </div>
-                  <InfoItem 
-                    label="Medicamentos" 
-                    value={selectedUser.healthInfo?.medications || "Ninguno"} 
+                  <InfoItem
+                    label="Medicamentos"
+                    value={selectedUser.healthInfo?.medications || "Ninguno"}
                   />
                 </div>
               </div>
@@ -315,10 +314,14 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
                 <div className="bg-gray-50 rounded-[2.5rem] p-2 border border-gray-100 aspect-video relative group overflow-hidden shadow-inner">
                   {selectedUser.documentUrl ? (
                     <>
-                      {selectedUser.documentUrl.toLowerCase().endsWith(".pdf") ? (
+                      {selectedUser.documentUrl
+                        .toLowerCase()
+                        .endsWith(".pdf") ? (
                         <div className="w-full h-full flex flex-col items-center justify-center bg-white rounded-[2.2rem]">
                           <FileText size={48} className="text-primary mb-2" />
-                          <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Ver PDF</span>
+                          <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">
+                            Ver PDF
+                          </span>
                         </div>
                       ) : (
                         <img
@@ -333,34 +336,51 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
                         rel="noreferrer"
                         className="absolute inset-0 bg-secondary/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-300 backdrop-blur-sm"
                       >
-                        <Button variant="primary" size="sm" className="rounded-xl font-black uppercase text-[10px] tracking-widest px-8">
-                          <ExternalLink size={14} className="mr-2" /> Ampliar Identificación
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          className="rounded-xl font-black uppercase text-[10px] tracking-widest px-8"
+                        >
+                          <ExternalLink size={14} className="mr-2" /> Ampliar
+                          Identificación
                         </Button>
                       </a>
                     </>
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center bg-white rounded-[2.2rem] border-2 border-dashed border-gray-200">
                       <AlertCircle size={40} className="text-gray-200 mb-2" />
-                      <span className="text-[10px] font-black uppercase text-gray-300 tracking-widest">Pendiente</span>
+                      <span className="text-[10px] font-black uppercase text-gray-300 tracking-widest">
+                        Pendiente
+                      </span>
                     </div>
                   )}
                 </div>
 
                 {selectedUser.age < 18 && (
-                  <label className={cn(
-                    "w-full flex items-center justify-center gap-4 h-20 bg-white border-2 border-dashed rounded-[2rem] cursor-pointer hover:bg-primary/5 transition-all group",
-                    isUploading ? "border-primary animate-pulse" : "border-gray-200 hover:border-primary/30"
-                  )}>
+                  <label
+                    className={cn(
+                      "w-full flex items-center justify-center gap-4 h-20 bg-white border-2 border-dashed rounded-[2rem] cursor-pointer hover:bg-primary/5 transition-all group",
+                      isUploading
+                        ? "border-primary animate-pulse"
+                        : "border-gray-200 hover:border-primary/30",
+                    )}
+                  >
                     {isUploading ? (
-                      <span className="text-[10px] font-black text-primary uppercase tracking-widest">Subiendo Archivo...</span>
+                      <span className="text-[10px] font-black text-primary uppercase tracking-widest">
+                        Subiendo Archivo...
+                      </span>
                     ) : (
                       <>
                         <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
                           <Upload size={20} />
                         </div>
                         <div className="text-left">
-                          <p className="text-[10px] font-black text-secondary uppercase tracking-widest">Cargar Responsiva</p>
-                          <p className="text-[8px] font-bold text-gray-400 uppercase mt-0.5">Formatos JPG, PNG o PDF</p>
+                          <p className="text-[10px] font-black text-secondary uppercase tracking-widest">
+                            Cargar Responsiva
+                          </p>
+                          <p className="text-[8px] font-bold text-gray-400 uppercase mt-0.5">
+                            Formatos JPG, PNG o PDF
+                          </p>
                         </div>
                       </>
                     )}
@@ -382,7 +402,17 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
   );
 }
 
-function InfoItem({ label, value, subValue, className }: { label: string; value: string; subValue?: string; className?: string }) {
+function InfoItem({
+  label,
+  value,
+  subValue,
+  className,
+}: {
+  label: string;
+  value: string;
+  subValue?: string;
+  className?: string;
+}) {
   return (
     <div className={cn("space-y-1", className)}>
       <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none">

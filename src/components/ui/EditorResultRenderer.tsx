@@ -8,7 +8,10 @@ interface EditorResultRendererProps {
   className?: string;
 }
 
-export function EditorResultRenderer({ data, className }: EditorResultRendererProps) {
+export function EditorResultRenderer({
+  data,
+  className,
+}: EditorResultRendererProps) {
   if (!data) return null;
 
   let parsedData: any = null;
@@ -35,7 +38,10 @@ export function EditorResultRenderer({ data, className }: EditorResultRendererPr
             return (
               <Tag
                 key={block.id}
-                className={cn("text-secondary uppercase tracking-tight", levels[block.data.level] || levels[2])}
+                className={cn(
+                  "text-secondary uppercase tracking-tight",
+                  levels[block.data.level] || levels[2],
+                )}
                 dangerouslySetInnerHTML={{ __html: block.data.text }}
               />
             );
@@ -55,11 +61,15 @@ export function EditorResultRenderer({ data, className }: EditorResultRendererPr
                 key={block.id}
                 className={cn(
                   "space-y-2 ml-5 text-[11px] text-gray-500 font-medium mb-4",
-                  block.data.style === "ordered" ? "list-decimal" : "list-disc"
+                  block.data.style === "ordered" ? "list-decimal" : "list-disc",
                 )}
               >
                 {block.data.items.map((item: string, i: number) => (
-                  <li key={i} className="pl-1" dangerouslySetInnerHTML={{ __html: item }} />
+                  <li
+                    key={i}
+                    className="pl-1"
+                    dangerouslySetInnerHTML={{ __html: item }}
+                  />
                 ))}
               </ListTag>
             );
@@ -68,12 +78,21 @@ export function EditorResultRenderer({ data, className }: EditorResultRendererPr
             return (
               <div key={block.id} className="space-y-2">
                 {block.data.items.map((item: any, i: number) => (
-                  <div key={i} className="flex items-center gap-2 text-[11px] text-gray-500">
-                    <div className={cn(
-                      "h-3 w-3 rounded border flex items-center justify-center shrink-0",
-                      item.checked ? "bg-primary border-primary" : "bg-white border-gray-200"
-                    )}>
-                      {item.checked && <div className="h-1.5 w-1.5 bg-secondary rounded-full" />}
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 text-[11px] text-gray-500"
+                  >
+                    <div
+                      className={cn(
+                        "h-3 w-3 rounded border flex items-center justify-center shrink-0",
+                        item.checked
+                          ? "bg-primary border-primary"
+                          : "bg-white border-gray-200",
+                      )}
+                    >
+                      {item.checked && (
+                        <div className="h-1.5 w-1.5 bg-secondary rounded-full" />
+                      )}
                     </div>
                     <span dangerouslySetInnerHTML={{ __html: item.text }} />
                   </div>

@@ -15,17 +15,24 @@ import {
   ShieldAlert,
   User as UserIcon,
   UserPlus,
+  Users,
   X,
   XCircle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { getLocalities, getSettings } from "@/app/actions/admin";
-import { registerUser } from "@/app/actions/auth";
+import {
+  registerUser,
+  uploadRegistrationFiles,
+  getCartaResponsivaTemplate,
+} from "@/app/actions/auth";
 import { verifyDocumentAge } from "@/app/actions/ocr";
 import { createCheckoutSession } from "@/app/actions/stripe";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
+import { PhotoUploadTabs } from "@/components/ui/PhotoUploadTab/PhotoUploadTabs";
+import { CartaResponsivaTabs } from "@/components/ui/CartaResponsivaTabs/CartaResponsivaTabs";
 import { EditorResultRenderer } from "@/components/ui/EditorResultRenderer";
 import { Input } from "@/components/ui/Input";
 import {
@@ -38,7 +45,41 @@ import {
 } from "@/components/ui/Modal";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { Select } from "@/components/ui/Select";
+import { ChatWidget } from "@/components/ChatWidget";
 import { cn } from "@/lib/utils";
+
+// ── Persistencia localStorage + IndexedDB ──
+const REG_KEY = "cngrs_reg_data";
+const REG_EXPIRY_KEY = "cngrs_reg_expiry";
+const TTL_24H = 24 * 60 * 60 * 1000;
+
+function saveRegText(data: Record<string, unknown>) {
+  try {
+    localStorage.setItem(REG_KEY, JSON.stringify(data));
+    localStorage.setItem(REG_EXPIRY_KEY, String(Date.now() + TTL_24H));
+  } catch {}
+}
+
+function loadRegText(): Record<string, any> | null {
+  try {
+    const exp = localStorage.getItem(REG_EXPIRY_KEY);
+    if (!exp || Date.now() > Number(exp)) {
+      clearRegStorage();
+      return null;
+    }
+    const raw = localStorage.getItem(REG_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearRegStorage() {
+  try {
+    localStorage.removeItem(REG_KEY);
+    localStorage.removeItem(REG_EXPIRY_KEY);
+  } catch {}
+}
 
 const _LOCALIDADES = [
   // Distritos México
@@ -275,7 +316,18 @@ export default function RegisterPage() {
   const [showManualEstado, setShowManualEstado] = React.useState(false);
   const [showManualLocalidad, setShowManualLocalidad] = React.useState(false);
   const [isDocumentVerified, setIsDocumentVerified] = React.useState(false);
+  const [isAdultCompanion, setIsAdultCompanion] = React.useState(false);
+  const [adultSpotsLeft, setAdultSpotsLeft] = React.useState<number | null>(
+    null,
+  );
   const [ocrError, setOcrError] = React.useState<string | null>(null);
+  const [isCompletingRegistration, setIsCompletingRegistration] =
+    React.useState(false);
+  const [cartaTemplateUrl, setCartaTemplateUrl] = React.useState<string | null>(
+    null,
+  );
+  const [cartaTemplateLoading, setCartaTemplateLoading] = React.useState(false);
+  const [isRestoredSession, setIsRestoredSession] = React.useState(false);
   const [config, setConfig] = React.useState({
     fullPaymentPrice: 1500,
     registrationFeePrice: 500,
@@ -286,22 +338,54 @@ export default function RegisterPage() {
     bankCLABE: "",
     bankHolder: "",
     oxxoReference: "",
+    oxxoCardNumber: "",
   });
   const [dbLocalities, setDbLocalities] = React.useState<any[]>([]);
 
+  // Cargar config, detectar retorno de Stripe, y restaurar sesiones guardadas
   React.useEffect(() => {
-    const loadData = async () => {
-      const [settingsData, localitiesData] = await Promise.all([
-        getSettings(),
-        getLocalities(),
-      ]);
-      if (settingsData) setConfig({
-        ...settingsData,
-        termsAndConditions: settingsData.termsAndConditions || ""
-      } as any);
+    const init = async () => {
+      // 1. Cargar config, localidades y plantilla de carta responsiva
+      const [settingsData, localitiesData, cartaTemplateData] =
+        await Promise.all([
+          getSettings(),
+          getLocalities(),
+          getCartaResponsivaTemplate(),
+        ]);
+      if (settingsData)
+        setConfig({
+          ...settingsData,
+          termsAndConditions: settingsData.termsAndConditions || "",
+        } as any);
       if (localitiesData) setDbLocalities(localitiesData);
+      if (cartaTemplateData?.success && cartaTemplateData?.templateUrl) {
+        setCartaTemplateUrl(cartaTemplateData.templateUrl);
+      }
+
+      // 2. Detectar retorno de Stripe
+      const params = new URLSearchParams(window.location.search);
+      const stripeStatus = params.get("stripe");
+      const sessionId = params.get("session_id");
+
+      if (stripeStatus === "success" && sessionId) {
+        await completeStripeRegistration(sessionId);
+        return;
+      }
+
+      if (stripeStatus === "cancel") {
+        // Restaurar datos y mostrar step 8 para reintentar
+        await restoreFromStorage();
+        setPaymentStatus("error");
+        return;
+      }
+
+      // 3. Detectar sesión guardada (transfer/cash que regresa a subir comprobante)
+      const saved = loadRegText();
+      if (saved) {
+        await restoreFromStorage();
+      }
     };
-    loadData();
+    init();
   }, []);
 
   const [formData, setFormData] = React.useState<FormData>({
@@ -339,7 +423,8 @@ export default function RegisterPage() {
     () => parseInt(formData.edad, 10),
     [formData.edad],
   );
-  const isEdadValida = edadInt >= 15 && edadInt <= 29;
+  const isEdadValida = edadInt >= 15;
+
   const needsResponsiva = edadInt >= 15 && edadInt <= 17;
 
   const filteredStates = React.useMemo(() => {
@@ -384,63 +469,215 @@ export default function RegisterPage() {
   const isStep8Valid =
     formData.metodoPago === "tarjeta" ? true : !!formData.comprobantePago;
 
+  // ── Funciones de persistencia ──
+
+  const saveFormAndFiles = async () => {
+    // Pre-subir archivos a R2 y guardar URLs
+    const fileData = new FormData();
+    if (formData.fotoPerfil) fileData.append("fotoPerfil", formData.fotoPerfil);
+    if (formData.documento) fileData.append("documento", formData.documento);
+    fileData.append("edad", formData.edad);
+
+    const uploadResult = await uploadRegistrationFiles(fileData);
+
+    const {
+      documento: _d,
+      fotoPerfil: _f,
+      comprobantePago: _c,
+      ...textData
+    } = formData;
+    saveRegText({
+      ...textData,
+      contactoEmergencia: formData.contactoEmergencia,
+      profilePhotoUrl: uploadResult.success
+        ? uploadResult.profileUrl
+        : undefined,
+      documentUrl: uploadResult.success ? uploadResult.docUrl : undefined,
+      sessionId: uploadResult.success ? uploadResult.sessionId : undefined,
+    });
+  };
+
+  const restoreFromStorage = async () => {
+    const saved = loadRegText();
+    if (!saved) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      nombre: saved.nombre || "",
+      apellido: saved.apellido || "",
+      email: saved.email || "",
+      password: saved.password || "",
+      edad: saved.edad || "",
+      genero: saved.genero || "",
+      telefono: saved.telefono || "",
+      contactoEmergencia: saved.contactoEmergencia || null,
+      documento: null,
+      pais: saved.pais || "",
+      otroPais: saved.otroPais || "",
+      estado: saved.estado || "",
+      localidad: saved.localidad || "",
+      alergias: saved.alergias || "",
+      padecimiento: saved.padecimiento || "",
+      medicamento: saved.medicamento || "",
+      dosisFrecuencia: saved.dosisFrecuencia || "",
+      fotoPerfil: null,
+      tallaPlayera: saved.tallaPlayera || "",
+      aceptaTerminos: saved.aceptaTerminos || false,
+      tipoPago: saved.tipoPago || "",
+      metodoPago: saved.metodoPago || "",
+      comprobantePago: null,
+    }));
+
+    if (saved.contactoEmergencia) {
+      setTempContacto(saved.contactoEmergencia);
+    }
+
+    setIsDocumentVerified(true);
+    setIsRestoredSession(true);
+    setStep(8);
+  };
+
+  const completeStripeRegistration = async (sessionId: string) => {
+    setIsCompletingRegistration(true);
+
+    const saved = loadRegText();
+    if (!saved) {
+      alert(
+        "No se encontraron los datos de registro. Por favor regístrate de nuevo.",
+      );
+      setIsCompletingRegistration(false);
+      setStep(1);
+      return;
+    }
+
+    // Construir FormData solo con texto + URLs pre-subidas (sin archivos)
+    const data = new FormData();
+    data.append("nombre", saved.nombre || "");
+    data.append("apellido", saved.apellido || "");
+    data.append("telefono", saved.telefono || "");
+    data.append("password", saved.password || "");
+    data.append("edad", saved.edad || "");
+    data.append("genero", saved.genero || "");
+    data.append("tallaPlayera", saved.tallaPlayera || "");
+    data.append(
+      "pais",
+      saved.pais === "Otro" ? saved.otroPais || "" : saved.pais || "",
+    );
+    data.append("estado", saved.estado || "");
+    data.append("localidad", saved.localidad || "");
+    data.append("alergias", saved.alergias || "");
+    data.append("padecimiento", saved.padecimiento || "");
+    data.append("medicamento", saved.medicamento || "");
+    data.append("dosisFrecuencia", saved.dosisFrecuencia || "");
+    if (saved.contactoEmergencia) {
+      data.append("contactoNombre", saved.contactoEmergencia.nombre);
+      data.append("contactoTelefono", saved.contactoEmergencia.telefono);
+    }
+    data.append("tipoPago", saved.tipoPago || "");
+    data.append("metodoPago", saved.metodoPago || "");
+    data.append("stripeSessionId", sessionId);
+    // URLs de archivos ya subidos a R2 antes de Stripe
+    if (saved.profilePhotoUrl)
+      data.append("profilePhotoUrl", saved.profilePhotoUrl);
+    if (saved.documentUrl) data.append("documentUrl", saved.documentUrl);
+    if (saved.sessionId) data.append("sessionId", saved.sessionId);
+
+    const result = await registerUser(data);
+
+    if (result.success) {
+      clearRegStorage();
+      router.push("/dashboard");
+    } else {
+      alert(result.error || "Error al completar el registro");
+      setIsCompletingRegistration(false);
+      // Restaurar datos para reintentar
+      await restoreFromStorage();
+    }
+  };
+
+  // ── Navegación ──
+
   const handleNext = () => {
     if (step === 1 && !isEdadValida) {
-      alert("Lo sentimos, la edad permitida es de 15 a 29 años.");
+      alert("Lo sentimos, la edad mínima permitida es de 15 años.");
       return;
     }
 
     if (step === 2 && !isDocumentVerified) {
-      alert("Por favor, espera a que terminemos de verificar tu edad o sube un documento válido.");
+      alert(
+        "Por favor, espera a que terminemos de verificar tu edad o sube un documento válido.",
+      );
       return;
     }
 
-    setStep((prev) => prev + 1);
-  };
+    const nextStep = step + 1;
 
-  const simulateStripePayment = async (userId: string) => {
-    setIsProcessing(true);
-
-    const result = await createCheckoutSession(
-      userId,
-      formData.tipoPago as "completo" | "inscripcion",
-    );
-
-    if (result.success && result.url) {
-      window.location.href = result.url;
-    } else {
-      alert(result.error || "Error al conectar con Stripe");
-
-      setIsProcessing(false);
+    // Auto-guardar al llegar al step 8 (transfer/efectivo puede regresar después)
+    if (nextStep === 8) {
+      saveFormAndFiles();
     }
+
+    setStep(nextStep);
   };
 
   const handleFinalAction = async () => {
     setIsProcessing(true);
 
-    // 1. Siempre guardar primero en la base de datos
+    if (formData.metodoPago === "tarjeta") {
+      // 1. Pre-subir archivos a R2 antes de ir a Stripe
+      const fileData = new FormData();
+      if (formData.fotoPerfil)
+        fileData.append("fotoPerfil", formData.fotoPerfil);
+      if (formData.documento) fileData.append("documento", formData.documento);
+      fileData.append("edad", formData.edad);
 
-    const result = await handleSubmit(false); // No cambiar de step automáticamente
+      const uploadResult = await uploadRegistrationFiles(fileData);
+      if (!uploadResult.success) {
+        alert("Error al subir archivos. Intenta de nuevo.");
+        setIsProcessing(false);
+        return;
+      }
 
-    if (result.success) {
-      if (formData.metodoPago === "tarjeta") {
-        // 2. Si es tarjeta, ir a Stripe
+      // 2. Guardar datos de texto + URLs de archivos en localStorage
+      const {
+        documento: _d,
+        fotoPerfil: _f,
+        comprobantePago: _c,
+        ...textData
+      } = formData;
+      saveRegText({
+        ...textData,
+        contactoEmergencia: formData.contactoEmergencia,
+        profilePhotoUrl: uploadResult.profileUrl,
+        documentUrl: uploadResult.docUrl,
+        sessionId: uploadResult.sessionId,
+      });
 
-        if (result.userId) {
-          await simulateStripePayment(result.userId);
-        } else {
-          alert("Error: No se pudo obtener el ID del usuario.");
+      // 3. Redirigir a Stripe
+      const result = await createCheckoutSession(
+        null,
+        formData.tipoPago as "completo" | "inscripcion",
+        uploadResult.sessionId,
+      );
 
-          setIsProcessing(false);
-        }
+      if (result.success && result.url) {
+        window.location.href = result.url;
       } else {
-        // 2. Si es efectivo/transf, ir al step de éxito
-
-        setStep(9);
+        alert(
+          result.error ||
+            "No se pudo conectar con la pasarela de pagos. Intenta más tarde.",
+        );
+        setIsProcessing(false);
       }
     } else {
-      alert(result.error || "Hubo un error al procesar tu registro");
-
+      // Transferencia/efectivo → Registrar ahora con comprobante
+      const result = await handleSubmit(false);
+      if (result.success) {
+        clearRegStorage();
+        setStep(9);
+      } else {
+        alert(result.error || "Hubo un error al procesar tu registro");
+      }
       setIsProcessing(false);
     }
   };
@@ -472,8 +709,17 @@ export default function RegisterPage() {
     }
     data.append("tipoPago", formData.tipoPago);
     data.append("metodoPago", formData.metodoPago);
-    if (formData.documento) data.append("documento", formData.documento);
-    if (formData.fotoPerfil) data.append("fotoPerfil", formData.fotoPerfil);
+    // Si es sesión restaurada, usar URLs pre-subidas; si no, enviar archivos
+    if (isRestoredSession) {
+      const saved = loadRegText();
+      if (saved?.profilePhotoUrl)
+        data.append("profilePhotoUrl", saved.profilePhotoUrl);
+      if (saved?.documentUrl) data.append("documentUrl", saved.documentUrl);
+      if (saved?.sessionId) data.append("sessionId", saved.sessionId);
+    } else {
+      if (formData.documento) data.append("documento", formData.documento);
+      if (formData.fotoPerfil) data.append("fotoPerfil", formData.fotoPerfil);
+    }
     if (formData.comprobantePago)
       data.append("comprobantePago", formData.comprobantePago);
 
@@ -500,7 +746,9 @@ export default function RegisterPage() {
     if (!file) return;
     if (field === "documento") {
       setFormData({ ...formData, documento: file });
-      setIsDocumentVerified(false); // Reiniciamos al subir uno nuevo
+      setIsDocumentVerified(false);
+      setIsAdultCompanion(false);
+      setAdultSpotsLeft(null);
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
       const isValid = await verifyAgeFromDocument(file);
@@ -545,6 +793,8 @@ export default function RegisterPage() {
   const verifyAgeFromDocument = async (file: File) => {
     setIsVerifying(true);
     setOcrError(null);
+    setIsAdultCompanion(false);
+    setAdultSpotsLeft(null);
     try {
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve) => {
@@ -554,8 +804,22 @@ export default function RegisterPage() {
       const base64Image = await base64Promise;
       const result = await verifyDocumentAge(base64Image);
       if (result.success) {
+        if ((result as any).isAdultCompanion) {
+          setIsAdultCompanion(true);
+          if (result.isValid) {
+            setAdultSpotsLeft((result as any).spotsLeft ?? null);
+            setIsDocumentVerified(true);
+            return true;
+          } else {
+            setOcrError(
+              "Lo sentimos, el cupo de adultos acompañantes (50 lugares) está lleno.",
+            );
+            setIsDocumentVerified(false);
+            return false;
+          }
+        }
         if (!result.isValid) {
-          const errorMsg = `Lo sentimos, detectamos una edad de ${result.age} años. El congreso es para jóvenes de 15 a 29 años.`;
+          const errorMsg = `Lo sentimos, detectamos una edad de ${result.age} años. La edad mínima es de 15 años.`;
           setOcrError(errorMsg);
           setIsDocumentVerified(false);
           return false;
@@ -576,6 +840,57 @@ export default function RegisterPage() {
       setIsVerifying(false);
     }
   };
+
+  const handleDownloadCartaTemplate = async () => {
+    if (!cartaTemplateUrl) {
+      alert("La plantilla no está disponible");
+      return;
+    }
+    try {
+      setCartaTemplateLoading(true);
+      const response = await fetch(cartaTemplateUrl);
+      if (!response.ok) throw new Error("Error descargando plantilla");
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Carta_Responsiva_Plantilla.pdf";
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error("Error descargando plantilla:", error);
+      alert("Error al descargar la plantilla");
+    } finally {
+      setCartaTemplateLoading(false);
+    }
+  };
+
+  // Pantalla de carga mientras se completa registro con Stripe
+  if (isCompletingRegistration) {
+    return (
+      <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-white p-12 rounded-[2rem] shadow-xl border border-gray-100 text-center space-y-6 max-w-md w-full"
+        >
+          <div className="h-20 w-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
+            <Loader2 className="h-10 w-10 text-primary animate-spin" />
+          </div>
+          <h2 className="text-xl font-black text-secondary uppercase tracking-tighter">
+            Completando tu Registro
+          </h2>
+          <p className="text-sm text-gray-500 font-medium">
+            Estamos verificando tu pago y creando tu cuenta. No cierres esta
+            ventana.
+          </p>
+        </motion.div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 sm:p-6 overflow-hidden">
@@ -744,6 +1059,8 @@ export default function RegisterPage() {
                             setFormData({ ...formData, documento: null });
                             setPreviewUrl(null);
                             setIsDocumentVerified(false);
+                            setIsAdultCompanion(false);
+                            setAdultSpotsLeft(null);
                           }}
                           className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-full cursor-pointer z-20 shadow-lg"
                         >
@@ -760,17 +1077,50 @@ export default function RegisterPage() {
                               </p>
                             </div>
                           ) : isDocumentVerified ? (
-                            <motion.div 
+                            <motion.div
                               initial={{ scale: 0.5, opacity: 0 }}
                               animate={{ scale: 1, opacity: 1 }}
-                              className="bg-white/90 p-6 rounded-[2.5rem] shadow-2xl flex flex-col items-center gap-3 border border-green-500/30"
+                              className={cn(
+                                "bg-white/90 p-6 rounded-[2.5rem] shadow-2xl flex flex-col items-center gap-3 border",
+                                isAdultCompanion
+                                  ? "border-amber-500/30"
+                                  : "border-green-500/30",
+                              )}
                             >
-                              <div className="h-12 w-12 bg-green-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-green-200">
-                                <CheckCircle2 size={28} />
+                              <div
+                                className={cn(
+                                  "h-12 w-12 rounded-2xl flex items-center justify-center text-white shadow-lg",
+                                  isAdultCompanion
+                                    ? "bg-amber-500 shadow-amber-200"
+                                    : "bg-green-500 shadow-green-200",
+                                )}
+                              >
+                                {isAdultCompanion ? (
+                                  <Users size={28} />
+                                ) : (
+                                  <CheckCircle2 size={28} />
+                                )}
                               </div>
-                              <p className="text-[10px] font-black text-green-600 uppercase tracking-[0.2em]">
-                                Edad Verificada
+                              <p
+                                className={cn(
+                                  "text-[10px] font-black uppercase tracking-[0.2em]",
+                                  isAdultCompanion
+                                    ? "text-amber-600"
+                                    : "text-green-600",
+                                )}
+                              >
+                                {isAdultCompanion
+                                  ? "Adulto Acompañante"
+                                  : "Edad Verificada"}
                               </p>
+                              {isAdultCompanion && adultSpotsLeft !== null && (
+                                <p className="text-[9px] font-bold text-amber-500 tracking-wider">
+                                  {adultSpotsLeft}{" "}
+                                  {adultSpotsLeft === 1
+                                    ? "lugar disponible"
+                                    : "lugares disponibles"}
+                                </p>
+                              )}
                             </motion.div>
                           ) : (
                             <div className="bg-white/95 p-6 rounded-[2rem] shadow-2xl flex flex-col items-center gap-3 border border-red-500/30 max-w-[90%] text-center">
@@ -779,14 +1129,16 @@ export default function RegisterPage() {
                                 Validación Fallida
                               </p>
                               <p className="text-[9px] font-bold text-gray-500 leading-tight">
-                                {ocrError || "No pudimos procesar tu documento correctamente."}
+                                {ocrError ||
+                                  "No pudimos procesar tu documento correctamente."}
                               </p>
-                              <Button 
-                                size="sm" 
-                                variant="outline" 
+                              <Button
+                                size="sm"
+                                variant="outline"
                                 className="h-8 text-[8px] uppercase font-black tracking-widest border-red-100 text-red-500 mt-1"
                                 onClick={() => {
-                                  if (formData.documento) verifyAgeFromDocument(formData.documento);
+                                  if (formData.documento)
+                                    verifyAgeFromDocument(formData.documento);
                                 }}
                               >
                                 Reintentar Análisis
@@ -833,7 +1185,9 @@ export default function RegisterPage() {
                   </Button>
                   <Button
                     className="flex-[2] h-14 font-bold shadow-lg"
-                    disabled={!isStep2Valid || isVerifying || !isDocumentVerified}
+                    disabled={
+                      !isStep2Valid || isVerifying || !isDocumentVerified
+                    }
                     onClick={handleNext}
                   >
                     Siguiente
@@ -1158,9 +1512,7 @@ export default function RegisterPage() {
                   }
                 />
                 <div className="bg-gray-50/50 p-6 rounded-[2rem] h-80 overflow-y-auto border border-gray-100 italic custom-scrollbar shadow-inner">
-                  <EditorResultRenderer 
-                    data={config.termsAndConditions} 
-                  />
+                  <EditorResultRenderer data={config.termsAndConditions} />
                   {!config.termsAndConditions && (
                     <div className="h-full flex items-center justify-center">
                       <p className="text-[10px] text-gray-400 uppercase font-black animate-pulse">
@@ -1328,6 +1680,37 @@ export default function RegisterPage() {
                 exit={{ opacity: 0, scale: 0.98 }}
                 className="space-y-6 bg-white p-5 sm:p-8 rounded-[2rem] shadow-xl border border-gray-100"
               >
+                {isRestoredSession && (
+                  <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl flex items-start gap-3">
+                    <CheckCircle2 className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-black text-blue-900 uppercase tracking-wider">
+                        Bienvenido de nuevo
+                      </p>
+                      <p className="text-[10px] text-blue-700/70 leading-relaxed mt-1">
+                        Tus datos están guardados. Solo sube tu comprobante para
+                        completar el registro.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {paymentStatus === "error" && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3"
+                  >
+                    <XCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-bold text-red-700">
+                        El pago con tarjeta fue cancelado. Puedes intentar de
+                        nuevo o elegir otro método.
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+
                 <div className="flex justify-between items-center mb-2">
                   <h2 className="text-lg font-bold text-secondary uppercase tracking-tight">
                     Detalles del Pago
@@ -1354,6 +1737,61 @@ export default function RegisterPage() {
                   </div>
                 </div>
 
+                {/* Selector de método de pago para sesiones restauradas */}
+                {isRestoredSession && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {(["tarjeta", "transferencia", "efectivo"] as const).map(
+                      (m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() =>
+                            setFormData({ ...formData, metodoPago: m })
+                          }
+                          className={cn(
+                            "flex flex-col items-center p-3 rounded-2xl border-2 transition-all gap-1 cursor-pointer",
+                            formData.metodoPago === m
+                              ? "border-primary bg-primary/5"
+                              : "border-gray-100",
+                          )}
+                        >
+                          {m === "tarjeta" ? (
+                            <CreditCard
+                              className={cn(
+                                "h-5 w-5",
+                                formData.metodoPago === m
+                                  ? "text-primary"
+                                  : "text-gray-300",
+                              )}
+                            />
+                          ) : m === "transferencia" ? (
+                            <Repeat
+                              className={cn(
+                                "h-5 w-5",
+                                formData.metodoPago === m
+                                  ? "text-primary"
+                                  : "text-gray-300",
+                              )}
+                            />
+                          ) : (
+                            <Banknote
+                              className={cn(
+                                "h-5 w-5",
+                                formData.metodoPago === m
+                                  ? "text-primary"
+                                  : "text-gray-300",
+                              )}
+                            />
+                          )}
+                          <span className="text-[9px] font-bold uppercase">
+                            {m}
+                          </span>
+                        </button>
+                      ),
+                    )}
+                  </div>
+                )}
+
                 {formData.metodoPago === "tarjeta" && (
                   <div className="space-y-5">
                     <div className="p-4 bg-green-50 border border-green-100 rounded-2xl flex items-center gap-3">
@@ -1375,16 +1813,11 @@ export default function RegisterPage() {
                         </p>
                       </motion.div>
                     )}
-                    <div className="space-y-3">
-                      <Input
-                        label="Número de Tarjeta"
-                        placeholder="0000 0000 0000 0000"
-                      />
-                      <div className="grid grid-cols-2 gap-4">
-                        <Input label="Vencimiento" placeholder="MM/YY" />
-                        <Input label="CVV" placeholder="123" />
-                      </div>
-                    </div>
+                    <p className="text-[10px] text-gray-400 font-medium text-center px-4 leading-relaxed italic">
+                      Al hacer clic en &quot;Confirmar y Finalizar&quot;, serás
+                      redirigido a Stripe para completar tu pago de forma
+                      segura.
+                    </p>
                   </div>
                 )}
                 {formData.metodoPago === "transferencia" && (
@@ -1393,12 +1826,23 @@ export default function RegisterPage() {
                       <p className="text-[10px] font-black uppercase tracking-widest">
                         Datos Bancarios (SPEI)
                       </p>
-                      <p className="text-xs font-bold uppercase">Banco: <span className="text-secondary">{config.bankName || "BBVA"}</span></p>
                       <p className="text-xs font-bold uppercase">
-                        CLABE: <span className="text-secondary tracking-tighter">{config.bankCLABE || "0123 4567 8901 2345 67"}</span>
+                        Banco:{" "}
+                        <span className="text-secondary">
+                          {config.bankName || "BBVA"}
+                        </span>
                       </p>
                       <p className="text-xs font-bold uppercase">
-                        Nombre: <span className="text-primary">{config.bankHolder || "JIDI Internacional A.C."}</span>
+                        CLABE:{" "}
+                        <span className="text-secondary tracking-tighter">
+                          {config.bankCLABE || "0123 4567 8901 2345 67"}
+                        </span>
+                      </p>
+                      <p className="text-xs font-bold uppercase">
+                        Nombre:{" "}
+                        <span className="text-primary">
+                          {config.bankHolder || "JIDI Internacional A.C."}
+                        </span>
                       </p>
                     </div>
                     <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-200 rounded-3xl cursor-pointer hover:bg-gray-50 transition-all">
@@ -1421,14 +1865,19 @@ export default function RegisterPage() {
                   <div className="space-y-4 text-center">
                     <div className="p-6 bg-amber-50 border border-amber-100 rounded-[2rem] space-y-4 text-amber-800">
                       <p className="text-[10px] font-black uppercase tracking-widest">
-                        Referencia de Pago (OXXO)
+                        Depósito en OXXO
                       </p>
-                      <p className="text-4xl font-black tracking-tighter text-secondary">
-                        {config.oxxoReference === "Tu número de teléfono" ? formData.telefono : config.oxxoReference}
-                      </p>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600">
+                          Número de Tarjeta
+                        </p>
+                        <p className="text-3xl font-black tracking-tighter text-secondary">
+                          {config.oxxoCardNumber || "0000 0000 0000 0000"}
+                        </p>
+                      </div>
                       <p className="text-[11px] leading-relaxed font-medium">
-                        Menciona esta referencia al cajero para realizar tu pago
-                        en efectivo.
+                        Proporciona este número de tarjeta en la caja de OXXO
+                        para realizar tu depósito.
                       </p>
                     </div>
                     <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-200 rounded-[2rem] cursor-pointer hover:bg-gray-50 transition-all">
@@ -1462,14 +1911,16 @@ export default function RegisterPage() {
                       "Confirmar y Finalizar"
                     )}
                   </Button>
-                  <Button
-                    variant="outline"
-                    className="h-12 border-gray-200"
-                    disabled={isProcessing}
-                    onClick={handleBack}
-                  >
-                    Atrás
-                  </Button>
+                  {!isRestoredSession && (
+                    <Button
+                      variant="outline"
+                      className="h-12 border-gray-200"
+                      disabled={isProcessing}
+                      onClick={handleBack}
+                    >
+                      Atrás
+                    </Button>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -1595,9 +2046,9 @@ export default function RegisterPage() {
               <span className="font-black text-red-500">
                 {detectedAge} años
               </span>
-              . El <span className="text-primary font-bold">CNGRS26</span> es
-              una experiencia diseñada exclusivamente para jóvenes de{" "}
-              <span className="font-bold">15 a 29 años</span>.
+              . El <span className="text-primary font-bold">CNGRS26</span>{" "}
+              requiere una edad mínima de{" "}
+              <span className="font-bold">15 años</span>.
             </p>
           </div>
 
@@ -1615,6 +2066,8 @@ export default function RegisterPage() {
           </Button>
         </ModalFooter>
       </Modal>
+
+      <ChatWidget userName={formData.nombre} />
     </main>
   );
 }

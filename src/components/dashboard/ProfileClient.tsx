@@ -55,10 +55,18 @@ export function ProfileClient({ user }: ProfileClientProps) {
             className="bg-secondary rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-2xl"
           >
             <div className="relative z-10 flex flex-col items-center text-center">
-              <div className="h-24 w-24 bg-white/10 rounded-3xl flex items-center justify-center mb-4 border border-white/20 shadow-inner">
-                <span className="text-4xl font-black text-primary">
-                  {user.firstName[0]}
-                </span>
+              <div className="h-24 w-24 bg-white rounded-3xl overflow-hidden mb-4 border border-white/20 shadow-inner flex items-center justify-center">
+                {user.profilePhotoUrl ? (
+                  <img
+                    src={user.profilePhotoUrl}
+                    className="w-full h-full object-cover"
+                    alt="Perfil"
+                  />
+                ) : (
+                  <span className="text-4xl font-black text-primary">
+                    {user.firstName[0]}
+                  </span>
+                )}
               </div>
               <h2 className="text-2xl font-black uppercase tracking-tighter">
                 {user.firstName} {user.lastName}

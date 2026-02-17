@@ -5,6 +5,7 @@ import { and, asc, count, desc, eq, sum } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import {
+  agendaDays,
   events,
   localities,
   notifications,
@@ -13,7 +14,14 @@ import {
   users,
   venues,
 } from "@/db/schema";
-import { uploadFile } from "@/lib/storage";
+import {
+  deleteFile,
+  uploadFile,
+  uploadCartaResponsivaTemplate as uploadCartaResponsivaToR2,
+  getCartaResponsivaUrl,
+  deleteCartaResponsivaTemplate as deleteCartaResponsivaFromR2,
+  checkCartaResponsivaExists,
+} from "@/lib/storage";
 
 // --- GESTIÓN DE LOCALIDADES ---
 export async function getLocalities() {
@@ -59,7 +67,6 @@ export async function getSettings() {
       bankName: "BBVA",
       bankCLABE: "0123 4567 8901 2345 67",
       bankHolder: "JIDI Internacional A.C.",
-      oxxoReference: "Tu número de teléfono",
     };
   }
 }
@@ -74,7 +81,7 @@ export async function updateSettings(data: {
   bankName?: string;
   bankCLABE?: string;
   bankHolder?: string;
-  oxxoReference?: string;
+  oxxoCardNumber?: string;
 }) {
   await db.update(settings).set({ ...data, updatedAt: new Date() });
   revalidatePath("/admin/dashboard");
@@ -127,10 +134,43 @@ export async function updateUserDetails(userId: string, data: any) {
 }
 
 export async function deleteUser(userId: string) {
-  await db.delete(users).where(eq(users.id, userId));
-  revalidatePath("/admin/users");
-  revalidatePath("/admin/dashboard");
-  return { success: true };
+  try {
+    // 1. Obtener al usuario y sus pagos para tener las URLs de los archivos
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      with: {
+        payments: true,
+      },
+    });
+
+    if (user) {
+      // 2. Eliminar foto de perfil
+      if (user.profilePhotoUrl) await deleteFile(user.profilePhotoUrl);
+
+      // 3. Eliminar INE / Carta Responsiva
+      if (user.documentUrl) await deleteFile(user.documentUrl);
+
+      // 4. Eliminar todos los comprobantes de pago
+      if (user.payments) {
+        for (const payment of user.payments) {
+          if (payment.proofUrl) await deleteFile(payment.proofUrl);
+        }
+      }
+    }
+
+    // 5. Eliminar de la base de datos (las relaciones se borran por CASCADE en el esquema)
+    await db.delete(users).where(eq(users.id, userId));
+
+    revalidatePath("/admin/users");
+    revalidatePath("/admin/dashboard");
+    return { success: true };
+  } catch (error) {
+    console.error("Error al eliminar usuario y sus archivos:", error);
+    return {
+      success: false,
+      error: "No se pudo eliminar al usuario completamente",
+    };
+  }
 }
 
 // --- GESTIÓN DE ADMINISTRADORES ---
@@ -276,10 +316,16 @@ export async function validatePayment(
 
     if (status === "completado") {
       // 1. Obtener todos los pagos completados del usuario
-      const userPayments = await db.select({ amount: payments.amount }).from(payments).where(
-        and(eq(payments.userId, updatedPayment.userId), eq(payments.status, "completado"))
-      );
-      
+      const userPayments = await db
+        .select({ amount: payments.amount })
+        .from(payments)
+        .where(
+          and(
+            eq(payments.userId, updatedPayment.userId),
+            eq(payments.status, "completado"),
+          ),
+        );
+
       const totalPaid = userPayments.reduce((acc, p) => acc + p.amount, 0);
 
       // 2. Obtener el precio total requerido de settings
@@ -308,6 +354,32 @@ export async function validatePayment(
     console.error("Error al validar pago:", error);
     return { success: false };
   }
+}
+
+// --- GESTIÓN DE DÍAS DE AGENDA ---
+export async function getAgendaDays() {
+  return await db.select().from(agendaDays).orderBy(asc(agendaDays.sortOrder));
+}
+
+export async function createAgendaDay(data: {
+  label: string;
+  date: string;
+  sortOrder: number;
+}) {
+  await db.insert(agendaDays).values(data);
+  revalidatePath("/admin/agenda");
+  revalidatePath("/dashboard/agenda");
+  return { success: true };
+}
+
+export async function deleteAgendaDay(id: number) {
+  // Delete associated events first
+  const dayIdStr = id.toString();
+  await db.delete(events).where(eq(events.dayId, dayIdStr));
+  await db.delete(agendaDays).where(eq(agendaDays.id, id));
+  revalidatePath("/admin/agenda");
+  revalidatePath("/dashboard/agenda");
+  return { success: true };
 }
 
 // --- GESTIÓN DE AGENDA ---
@@ -349,5 +421,53 @@ export async function broadcastNotification(data: {
     return { success: true };
   } catch (_error) {
     return { success: false };
+  }
+}
+
+// --- GESTIÓN DE CARTA RESPONSIVA ---
+// Usa ruta fija en R2: templates/carta-responsiva.pdf
+
+export async function uploadCartaResponsivaTemplate(formData: FormData) {
+  try {
+    const file = formData.get("template") as File;
+    if (!file) return { success: false, error: "No file provided" };
+
+    // Subir a ruta fija (sobreescribe si ya existe)
+    const url = await uploadCartaResponsivaToR2(file);
+
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/auth/register");
+    return { success: true, url, fileName: file.name };
+  } catch (error) {
+    console.error("Error uploading carta responsiva template:", error);
+    return { success: false, error: "Error al subir la plantilla" };
+  }
+}
+
+export async function getCartaResponsivaTemplate() {
+  try {
+    const exists = await checkCartaResponsivaExists();
+    if (!exists) {
+      return { success: false, error: "No template found" };
+    }
+
+    const url = getCartaResponsivaUrl();
+    return { success: true, templateUrl: url };
+  } catch (error) {
+    console.error("Error getting carta responsiva template:", error);
+    return { success: false, error: "Error al obtener la plantilla" };
+  }
+}
+
+export async function deleteCartaResponsivaTemplate() {
+  try {
+    await deleteCartaResponsivaFromR2();
+
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/auth/register");
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting carta responsiva template:", error);
+    return { success: false, error: "Error al eliminar la plantilla" };
   }
 }
