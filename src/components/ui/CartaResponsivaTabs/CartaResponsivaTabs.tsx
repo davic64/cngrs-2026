@@ -1,7 +1,15 @@
 "use client";
 
 import React from "react";
-import { Download, Upload, FileText, X, AlertCircle } from "lucide-react";
+import {
+  Download,
+  Upload,
+  FileText,
+  X,
+  AlertCircle,
+  Camera,
+  Image,
+} from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +25,7 @@ interface CartaResponsivaTabsProps {
 }
 
 type Step = "intro" | "download" | "upload";
+type UploadMethod = "camera" | "image" | "pdf" | null;
 
 export function CartaResponsivaTabs({
   templateUrl,
@@ -29,6 +38,7 @@ export function CartaResponsivaTabs({
   isLoading = false,
 }: CartaResponsivaTabsProps) {
   const [step, setStep] = React.useState<Step>("intro");
+  const [uploadMethod, setUploadMethod] = React.useState<UploadMethod>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [downloadError, setDownloadError] = React.useState<string | null>(null);
 
@@ -39,7 +49,9 @@ export function CartaResponsivaTabs({
       setStep("upload");
     } catch (error) {
       setDownloadError(
-        error instanceof Error ? error.message : "Error al descargar la plantilla"
+        error instanceof Error
+          ? error.message
+          : "Error al descargar la plantilla",
       );
     }
   };
@@ -48,19 +60,44 @@ export function CartaResponsivaTabs({
     const file = e.target.files?.[0];
     if (file) {
       onFileSelect(file);
-      setStep("upload");
+      setUploadMethod(null);
     }
   };
 
+  const getAcceptType = () => {
+    switch (uploadMethod) {
+      case "camera":
+        return "image/*";
+      case "image":
+        return "image/jpeg,image/png,image/webp";
+      case "pdf":
+        return "application/pdf";
+      default:
+        return "image/*,application/pdf";
+    }
+  };
+
+  const isPdf =
+    fileName?.toLowerCase().endsWith(".pdf") ||
+    previewUrl?.includes("application/pdf");
+
   if (previewUrl) {
     return (
-      <div className="flex flex-col items-center gap-4">
-        <div className="relative w-full max-w-xs rounded-3xl overflow-hidden border-4 border-green-500/20 shadow-xl bg-white">
-          <iframe
-            src={previewUrl}
-            className="w-full h-80 border-0"
-            title="Carta Responsiva Preview"
-          />
+      <div className="flex flex-col items-center gap-4 w-full">
+        <div className="relative w-full rounded-3xl overflow-hidden border-4 border-green-500/20 shadow-xl bg-white">
+          {isPdf ? (
+            <iframe
+              src={previewUrl}
+              className="w-full h-[500px] border-0"
+              title="Carta Responsiva Preview"
+            />
+          ) : (
+            <img
+              src={previewUrl}
+              className="w-full h-auto min-h-[300px] max-h-[500px] object-contain bg-gray-50"
+              alt="Carta Responsiva Preview"
+            />
+          )}
           <button
             type="button"
             onClick={onRemove}
@@ -89,7 +126,7 @@ export function CartaResponsivaTabs({
                 "h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold",
                 step === s || (step === "upload" && s !== "intro")
                   ? "bg-primary text-white"
-                  : "bg-gray-200 text-gray-600"
+                  : "bg-gray-200 text-gray-600",
               )}
             >
               {idx + 1}
@@ -100,7 +137,7 @@ export function CartaResponsivaTabs({
                   "h-1 w-8",
                   step === s || (step === "upload" && s !== "intro")
                     ? "bg-primary"
-                    : "bg-gray-200"
+                    : "bg-gray-200",
                 )}
               />
             )}
@@ -111,7 +148,7 @@ export function CartaResponsivaTabs({
       {/* Content */}
       {step === "intro" && (
         <div className="flex flex-col gap-4 text-center">
-          <div className="inline-flex justify-center p-4 bg-blue-50 rounded-full mb-2">
+          <div className="inline-flex justify-center p-4 bg-blue-50 rounded-full mb-2 mx-auto">
             <FileText className="h-8 w-8 text-blue-600" />
           </div>
           <h3 className="text-lg font-bold text-secondary uppercase">
@@ -122,8 +159,7 @@ export function CartaResponsivaTabs({
             una carta de autorización.
           </p>
           <p className="text-xs text-gray-500 bg-blue-50 p-3 rounded-xl">
-            Descarga la plantilla, complétala, fírmala y luego sube el archivo
-            PDF.
+            Descarga la plantilla, complétala, fírmala y luego sube el archivo.
           </p>
 
           <Button
@@ -140,27 +176,24 @@ export function CartaResponsivaTabs({
             onClick={() => setStep("upload")}
             className="text-xs text-primary hover:text-primary/80 transition-colors"
           >
-            O salta directamente a subir →
+            Ya tengo la carta firmada →
           </button>
         </div>
       )}
 
       {step === "download" && (
         <div className="flex flex-col gap-4 text-center">
-          <div className="inline-flex justify-center p-4 bg-green-50 rounded-full mb-2">
+          <div className="inline-flex justify-center p-4 bg-green-50 rounded-full mb-2 mx-auto">
             <FileText className="h-8 w-8 text-green-600" />
           </div>
           <h3 className="text-lg font-bold text-secondary uppercase">
             Completar Carta
           </h3>
-          <p className="text-sm text-gray-600">
-            Ahora debes:
-          </p>
+          <p className="text-sm text-gray-600">Ahora debes:</p>
           <ol className="text-sm text-left bg-gray-50 p-4 rounded-xl space-y-2">
             <li>✓ Descargar la plantilla</li>
             <li>✓ Completar todos los campos requeridos</li>
             <li>✓ Obtener la firma del adulto responsable</li>
-            <li>✓ Guardar como PDF</li>
             <li>✓ Volver aquí y subir el archivo</li>
           </ol>
 
@@ -197,30 +230,119 @@ export function CartaResponsivaTabs({
             </div>
           )}
 
-          <label className="flex flex-col items-center justify-center w-full p-8 border-4 border-dashed border-gray-200 rounded-3xl cursor-pointer hover:bg-gray-50 transition-all hover:border-primary/30">
-            <Upload className="h-10 w-10 text-primary mb-3" />
-            <span className="text-sm font-bold text-secondary text-center">
-              Haz clic o arrastra el PDF
-            </span>
-            <span className="text-xs text-gray-500 mt-1">
-              (Solo PDF firmado y completado)
-            </span>
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              accept="application/pdf"
-              onChange={handleFileChange}
-              disabled={isLoading}
-            />
-          </label>
+          {uploadMethod === null ? (
+            <div className="flex flex-col gap-3">
+              <p className="text-xs text-gray-600 text-center font-medium">
+                ¿Cómo deseas subir la carta firmada?
+              </p>
+              <div className="grid grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setUploadMethod("camera")}
+                  disabled={isLoading}
+                  className="flex flex-col items-center gap-2 p-4 border-2 border-dashed border-gray-200 rounded-2xl hover:border-primary/50 hover:bg-primary/5 transition-all disabled:opacity-50"
+                >
+                  <Camera className="h-6 w-6 text-primary" />
+                  <span className="text-[10px] font-bold text-secondary uppercase text-center leading-tight">
+                    Tomar Foto
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUploadMethod("image")}
+                  disabled={isLoading}
+                  className="flex flex-col items-center gap-2 p-4 border-2 border-dashed border-gray-200 rounded-2xl hover:border-primary/50 hover:bg-primary/5 transition-all disabled:opacity-50"
+                >
+                  <Image className="h-6 w-6 text-primary" />
+                  <span className="text-[10px] font-bold text-secondary uppercase text-center leading-tight">
+                    Subir Imagen
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUploadMethod("pdf")}
+                  disabled={isLoading}
+                  className="flex flex-col items-center gap-2 p-4 border-2 border-dashed border-gray-200 rounded-2xl hover:border-primary/50 hover:bg-primary/5 transition-all disabled:opacity-50"
+                >
+                  <FileText className="h-6 w-6 text-primary" />
+                  <span className="text-[10px] font-bold text-secondary uppercase text-center leading-tight">
+                    Subir PDF
+                  </span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <button
+                type="button"
+                onClick={() => setUploadMethod(null)}
+                className="text-xs text-gray-500 hover:text-primary transition-colors text-left"
+              >
+                ← Cambiar método
+              </button>
+              <label
+                className={cn(
+                  "flex flex-col items-center justify-center w-full p-8 border-4 border-dashed border-gray-200 rounded-3xl cursor-pointer hover:bg-gray-50 transition-all hover:border-primary/30",
+                  isLoading && "opacity-50 pointer-events-none",
+                )}
+              >
+                {uploadMethod === "camera" && (
+                  <>
+                    <Camera className="h-10 w-10 text-primary mb-3" />
+                    <span className="text-sm font-bold text-secondary text-center">
+                      Tomar Foto
+                    </span>
+                    <span className="text-xs text-gray-500 mt-1 text-center">
+                      Asegúrate que la carta se vea completa y clara
+                    </span>
+                  </>
+                )}
+                {uploadMethod === "image" && (
+                  <>
+                    <Image className="h-10 w-10 text-primary mb-3" />
+                    <span className="text-sm font-bold text-secondary text-center">
+                      Subir Imagen
+                    </span>
+                    <span className="text-xs text-gray-500 mt-1 text-center">
+                      JPG, PNG o WebP
+                    </span>
+                  </>
+                )}
+                {uploadMethod === "pdf" && (
+                  <>
+                    <FileText className="h-10 w-10 text-primary mb-3" />
+                    <span className="text-sm font-bold text-secondary text-center">
+                      Subir PDF
+                    </span>
+                    <span className="text-xs text-gray-500 mt-1 text-center">
+                      Archivo PDF firmado
+                    </span>
+                  </>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  accept={getAcceptType()}
+                  capture={
+                    uploadMethod === "camera" ? "environment" : undefined
+                  }
+                  onChange={handleFileChange}
+                  disabled={isLoading}
+                />
+              </label>
+            </div>
+          )}
 
           <button
             type="button"
-            onClick={() => setStep("intro")}
+            onClick={() => {
+              setStep("intro");
+              setUploadMethod(null);
+            }}
             className="text-xs text-gray-500 hover:text-primary transition-colors text-center"
           >
-            ← Volver atrás
+            ← Volver al inicio
           </button>
         </div>
       )}

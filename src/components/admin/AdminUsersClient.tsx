@@ -326,7 +326,7 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
                       ) : (
                         <img
                           src={selectedUser.documentUrl}
-                          className="w-full h-full object-cover rounded-[2.2rem]"
+                          className="w-full h-full object-contain bg-white rounded-[2.2rem]"
                           alt="Documento"
                         />
                       )}

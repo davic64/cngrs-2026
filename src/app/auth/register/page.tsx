@@ -1036,144 +1036,131 @@ export default function RegisterPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="relative">
-                    {formData.documento ? (
-                      <div className="relative w-full h-64 rounded-3xl overflow-hidden border-2 border-primary/20">
-                        {previewUrl ? (
-                          <img
-                            src={previewUrl}
-                            className="w-full h-full object-cover"
-                            alt="Doc"
-                          />
-                        ) : (
-                          <div className="flex flex-col items-center justify-center h-full">
-                            <FileText className="h-10 w-10 text-primary" />
-                            <span className="text-xs mt-2">
-                              {formData.documento.name}
-                            </span>
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFormData({ ...formData, documento: null });
-                            setPreviewUrl(null);
-                            setIsDocumentVerified(false);
-                            setIsAdultCompanion(false);
-                            setAdultSpotsLeft(null);
-                          }}
-                          className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-full cursor-pointer z-20 shadow-lg"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
 
-                        {/* Status Overlay */}
-                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/5 backdrop-blur-[2px]">
-                          {isVerifying ? (
-                            <div className="bg-white/90 p-6 rounded-[2rem] shadow-2xl flex flex-col items-center gap-3 border border-primary/20">
-                              <Loader2 className="h-10 w-10 text-primary animate-spin" />
-                              <p className="text-[10px] font-black text-secondary uppercase tracking-[0.2em] animate-pulse">
-                                Analizando Documento...
-                              </p>
-                            </div>
-                          ) : isDocumentVerified ? (
-                            <motion.div
-                              initial={{ scale: 0.5, opacity: 0 }}
-                              animate={{ scale: 1, opacity: 1 }}
+                  {/* Carta Responsiva para menores */}
+                  {needsResponsiva ? (
+                    <CartaResponsivaTabs
+                      templateUrl={cartaTemplateUrl}
+                      templateLoading={cartaTemplateLoading}
+                      onDownloadTemplate={handleDownloadCartaTemplate}
+                      onFileSelect={(file) => {
+                        setFormData({ ...formData, documento: file });
+                        const url = URL.createObjectURL(file);
+                        setPreviewUrl(url);
+                        // Auto-verify para responsiva
+                        setIsDocumentVerified(true);
+                      }}
+                      previewUrl={previewUrl}
+                      fileName={formData.documento?.name}
+                      onRemove={() => {
+                        setFormData({ ...formData, documento: null });
+                        setPreviewUrl(null);
+                        setIsDocumentVerified(false);
+                      }}
+                      isLoading={isVerifying}
+                    />
+                  ) : (
+                    /* PhotoUploadTabs para adultos (INE/Pasaporte - SOLO imagen) */
+                    <div className="space-y-4">
+                      <PhotoUploadTabs
+                        onFileSelect={async (file) => {
+                          setFormData({ ...formData, documento: file });
+                          const url = URL.createObjectURL(file);
+                          setPreviewUrl(url);
+                          // Validación automática al seleccionar
+                          await verifyAgeFromDocument(file);
+                        }}
+                        previewUrl={previewUrl}
+                        fileName={formData.documento?.name}
+                        onRemove={() => {
+                          setFormData({ ...formData, documento: null });
+                          setPreviewUrl(null);
+                          setIsDocumentVerified(false);
+                          setIsAdultCompanion(false);
+                          setAdultSpotsLeft(null);
+                        }}
+                        width="w-full"
+                        height="h-64"
+                        isLoading={isVerifying}
+                        isVerified={isDocumentVerified}
+                        description="Toma una foto clara de tu INE o Pasaporte"
+                      />
+
+                      {/* Status de verificación */}
+                      {formData.documento && isDocumentVerified && (
+                        <motion.div
+                          initial={{ scale: 0.5, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          className={cn(
+                            "p-4 rounded-2xl flex items-center gap-3 border",
+                            isAdultCompanion
+                              ? "bg-amber-50 border-amber-200"
+                              : "bg-green-50 border-green-200",
+                          )}
+                        >
+                          <div
+                            className={cn(
+                              "h-10 w-10 rounded-full flex items-center justify-center text-white",
+                              isAdultCompanion
+                                ? "bg-amber-500"
+                                : "bg-green-500",
+                            )}
+                          >
+                            {isAdultCompanion ? (
+                              <Users size={20} />
+                            ) : (
+                              <CheckCircle2 size={20} />
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <p
                               className={cn(
-                                "bg-white/90 p-6 rounded-[2.5rem] shadow-2xl flex flex-col items-center gap-3 border",
+                                "text-sm font-bold",
                                 isAdultCompanion
-                                  ? "border-amber-500/30"
-                                  : "border-green-500/30",
+                                  ? "text-amber-600"
+                                  : "text-green-600",
                               )}
                             >
-                              <div
-                                className={cn(
-                                  "h-12 w-12 rounded-2xl flex items-center justify-center text-white shadow-lg",
-                                  isAdultCompanion
-                                    ? "bg-amber-500 shadow-amber-200"
-                                    : "bg-green-500 shadow-green-200",
-                                )}
-                              >
-                                {isAdultCompanion ? (
-                                  <Users size={28} />
-                                ) : (
-                                  <CheckCircle2 size={28} />
-                                )}
-                              </div>
-                              <p
-                                className={cn(
-                                  "text-[10px] font-black uppercase tracking-[0.2em]",
-                                  isAdultCompanion
-                                    ? "text-amber-600"
-                                    : "text-green-600",
-                                )}
-                              >
-                                {isAdultCompanion
-                                  ? "Adulto Acompañante"
-                                  : "Edad Verificada"}
+                              {isAdultCompanion
+                                ? "Adulto Acompañante"
+                                : "Edad Verificada"}
+                            </p>
+                            {isAdultCompanion && adultSpotsLeft !== null && (
+                              <p className="text-xs text-amber-500 mt-1">
+                                {adultSpotsLeft}{" "}
+                                {adultSpotsLeft === 1
+                                  ? "lugar disponible"
+                                  : "lugares disponibles"}
                               </p>
-                              {isAdultCompanion && adultSpotsLeft !== null && (
-                                <p className="text-[9px] font-bold text-amber-500 tracking-wider">
-                                  {adultSpotsLeft}{" "}
-                                  {adultSpotsLeft === 1
-                                    ? "lugar disponible"
-                                    : "lugares disponibles"}
-                                </p>
-                              )}
-                            </motion.div>
-                          ) : (
-                            <div className="bg-white/95 p-6 rounded-[2rem] shadow-2xl flex flex-col items-center gap-3 border border-red-500/30 max-w-[90%] text-center">
-                              <AlertCircle className="h-10 w-10 text-red-500" />
-                              <p className="text-[10px] font-black text-red-600 uppercase tracking-[0.2em]">
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+
+                      {/* Error de verificación */}
+                      {formData.documento &&
+                        !isDocumentVerified &&
+                        ocrError && (
+                          <motion.div
+                            initial={{ scale: 0.5, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            className="p-4 rounded-2xl flex items-center gap-3 bg-red-50 border border-red-200"
+                          >
+                            <AlertCircle className="h-10 w-10 text-red-500" />
+                            <div>
+                              <p className="text-sm font-bold text-red-600">
                                 Validación Fallida
                               </p>
-                              <p className="text-[9px] font-bold text-gray-500 leading-tight">
-                                {ocrError ||
-                                  "No pudimos procesar tu documento correctamente."}
+                              <p className="text-xs text-red-500 mt-1">
+                                {ocrError}
                               </p>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 text-[8px] uppercase font-black tracking-widest border-red-100 text-red-500 mt-1"
-                                onClick={() => {
-                                  if (formData.documento)
-                                    verifyAgeFromDocument(formData.documento);
-                                }}
-                              >
-                                Reintentar Análisis
-                              </Button>
                             </div>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-gray-200 rounded-3xl cursor-pointer hover:bg-gray-50 transition-all relative overflow-hidden">
-                        {isVerifying && (
-                          <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center z-10">
-                            <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
-                            <p className="text-xs font-black text-secondary uppercase tracking-widest animate-pulse">
-                              Verificando Edad...
-                            </p>
-                          </div>
+                          </motion.div>
                         )}
-                        <Camera className="h-10 w-10 text-primary mb-2" />
-                        <span className="text-sm font-bold text-secondary text-center px-4">
-                          {needsResponsiva
-                            ? "Subir Carta Responsiva"
-                            : "Tomar foto de INE"}
-                        </span>
-                        <input
-                          type="file"
-                          className="hidden"
-                          accept="image/*,application/pdf"
-                          onChange={(e) => handleFileChange(e, "documento")}
-                          disabled={isVerifying}
-                        />
-                      </label>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
+
                 <div className="flex gap-3">
                   <Button
                     variant="outline"
@@ -1426,46 +1413,21 @@ export default function RegisterPage() {
                     Sube una foto tuya para completar tu perfil y tu gafete
                     digital.
                   </p>
-                  <div className="relative group">
-                    {formData.fotoPerfil ? (
-                      <div className="relative w-48 h-48 mx-auto rounded-full overflow-hidden border-4 border-primary/20 shadow-xl">
-                        {profilePreviewUrl ? (
-                          <img
-                            src={profilePreviewUrl}
-                            className="w-full h-full object-cover"
-                            alt="Perfil"
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center h-full bg-gray-50">
-                            <FileText className="h-10 w-10 text-primary" />
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFormData({ ...formData, fotoPerfil: null });
-                            setProfilePreviewUrl(null);
-                          }}
-                          className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                        >
-                          <X className="h-8 w-8 text-white" />
-                        </button>
-                      </div>
-                    ) : (
-                      <label className="flex flex-col items-center justify-center w-48 h-48 mx-auto border-4 border-dashed border-gray-100 rounded-full cursor-pointer hover:bg-gray-50 transition-all hover:border-primary/30">
-                        <Camera className="h-10 w-10 text-primary mb-2" />
-                        <span className="text-[10px] font-black text-secondary/40 uppercase tracking-widest px-4 leading-tight text-center">
-                          Tomar Foto o Subir
-                        </span>
-                        <input
-                          type="file"
-                          className="hidden"
-                          accept="image/*"
-                          onChange={(e) => handleFileChange(e, "fotoPerfil")}
-                        />
-                      </label>
-                    )}
-                  </div>
+                  <PhotoUploadTabs
+                    onFileSelect={(file) => {
+                      setFormData({ ...formData, fotoPerfil: file });
+                      const url = URL.createObjectURL(file);
+                      setProfilePreviewUrl(url);
+                    }}
+                    previewUrl={profilePreviewUrl}
+                    fileName={formData.fotoPerfil?.name}
+                    onRemove={() => {
+                      setFormData({ ...formData, fotoPerfil: null });
+                      setProfilePreviewUrl(null);
+                    }}
+                    circular={true}
+                    description="Sube una foto donde se vea bien tu rostro"
+                  />
                 </div>
                 <div className="flex gap-3 pt-4">
                   <Button
