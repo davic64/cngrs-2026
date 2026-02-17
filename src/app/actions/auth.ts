@@ -97,14 +97,15 @@ export async function registerUser(formData: FormData) {
     if (!profilePhotoUrl) {
       const profilePhoto = formData.get("fotoPerfil") as File;
       if (profilePhoto && profilePhoto.size > 0) {
-        profileUrl = await uploadFile(profilePhoto, "Fotos");
+        profileUrl = await uploadFile(profilePhoto, "Perfil");
       }
     }
 
     if (!documentUrl) {
       const document = formData.get("documento") as File;
       if (document && document.size > 0) {
-        const folderName = age >= 15 && age <= 17 ? "Carta Responsiva" : "INE";
+        const folderName =
+          age >= 15 && age <= 17 ? "Carta Responsiva" : "Identificación";
         docUrl = await uploadFile(document, folderName);
       }
     }
@@ -118,6 +119,7 @@ export async function registerUser(formData: FormData) {
       | "tarjeta"
       | "transferencia"
       | "efectivo";
+    const stripeSessionId = formData.get("stripeSessionId") as string | null;
     const skipCookie = formData.get("skipCookie") === "true";
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -159,8 +161,32 @@ export async function registerUser(formData: FormData) {
         dosageFrequency,
       });
 
-      // Solo crear registro de pago para transfer/efectivo con comprobante
-      if (metodoPago !== "tarjeta" && proofUrl) {
+      // Registrar pago inicial
+      if (metodoPago === "tarjeta" && stripeSessionId) {
+        // Pago exitoso con Stripe durante el registro
+        const config = await db.query.settings.findFirst();
+        const amount =
+          tipoPago === "completo"
+            ? config?.fullPaymentPrice || 1500
+            : config?.registrationFeePrice || 500;
+
+        await db.insert(payments).values({
+          userId: user.id,
+          amount,
+          type: tipoPago,
+          method: "tarjeta",
+          status: "completado",
+        });
+
+        // Actualizar estatus a parcial o completado según el monto
+        await db
+          .update(users)
+          .set({
+            registrationStatus: tipoPago === "completo" ? "completado" : "parcial",
+          })
+          .where(eq(users.id, user.id));
+      } else if (metodoPago !== "tarjeta" && proofUrl) {
+        // Pago por transferencia/efectivo (requiere revisión)
         const config = await db.query.settings.findFirst();
         const amount =
           tipoPago === "completo"

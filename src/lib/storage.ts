@@ -47,7 +47,13 @@ export async function uploadTemporaryFile(
   fileType: "fotoPerfil" | "documento" | "comprobantePago",
 ) {
   try {
-    const url = await uploadFile(file, "Temporal");
+    const folder =
+      fileType === "fotoPerfil"
+        ? "Perfil"
+        : fileType === "documento"
+          ? "Identificación"
+          : "Pagos";
+    const url = await uploadFile(file, folder);
 
     // Registrar el archivo temporal en la BD
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 horas

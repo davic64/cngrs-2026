@@ -585,6 +585,10 @@ export default function RegisterPage() {
     const result = await registerUser(data);
 
     if (result.success) {
+      // Registrar el pago de Stripe en el historial del usuario
+      // Importamos payments desde el esquema si es necesario, pero aquí usamos registerUser que es una Server Action.
+      // Sin embargo, como estamos en un componente Client, debemos asegurarnos de que el registro del pago ocurra en el servidor.
+      // Modificaré mejor la acción registerUser para que ella se encargue de registrar el pago si viene un stripeSessionId.
       clearRegStorage();
       router.push("/dashboard");
     } else {
