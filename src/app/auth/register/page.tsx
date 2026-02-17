@@ -833,7 +833,7 @@ export default function RegisterPage() {
       }
     } catch (error) {
       console.error("Error en validación OCR:", error);
-      setOcrError("Error de conexión con el servicio de validación");
+      setOcrError("No se pudo leer el documento. Por favor intenta de nuevo.");
       setIsDocumentVerified(false);
       return false;
     } finally {
@@ -1022,144 +1022,77 @@ export default function RegisterPage() {
                 exit={{ opacity: 0, scale: 0.98 }}
                 className="space-y-6 bg-white p-5 sm:p-8 rounded-[2rem] shadow-xl border border-gray-100"
               >
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                      <FileText size={20} />
-                    </div>
-                    <div>
-                      <h2 className="text-lg font-bold text-secondary uppercase tracking-tight leading-none">
-                        {needsResponsiva ? "Responsiva" : "Identificación"}
-                      </h2>
-                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-1">
-                        {needsResponsiva ? "Menores de 18" : "INE o Pasaporte"}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Carta Responsiva para menores */}
-                  {needsResponsiva ? (
-                    <CartaResponsivaTabs
-                      templateUrl={cartaTemplateUrl}
-                      templateLoading={cartaTemplateLoading}
-                      onDownloadTemplate={handleDownloadCartaTemplate}
-                      onFileSelect={(file) => {
-                        setFormData({ ...formData, documento: file });
-                        const url = URL.createObjectURL(file);
-                        setPreviewUrl(url);
-                        // Auto-verify para responsiva
-                        setIsDocumentVerified(true);
-                      }}
-                      previewUrl={previewUrl}
-                      fileName={formData.documento?.name}
-                      onRemove={() => {
-                        setFormData({ ...formData, documento: null });
-                        setPreviewUrl(null);
-                        setIsDocumentVerified(false);
-                      }}
-                      isLoading={isVerifying}
-                    />
-                  ) : (
-                    /* PhotoUploadTabs para adultos (INE/Pasaporte - SOLO imagen) */
-                    <div className="space-y-4">
-                      <PhotoUploadTabs
-                        onFileSelect={async (file) => {
-                          setFormData({ ...formData, documento: file });
-                          const url = URL.createObjectURL(file);
-                          setPreviewUrl(url);
-                          // Validación automática al seleccionar
-                          await verifyAgeFromDocument(file);
-                        }}
-                        previewUrl={previewUrl}
-                        fileName={formData.documento?.name}
-                        onRemove={() => {
-                          setFormData({ ...formData, documento: null });
-                          setPreviewUrl(null);
-                          setIsDocumentVerified(false);
-                          setIsAdultCompanion(false);
-                          setAdultSpotsLeft(null);
-                        }}
-                        width="w-full"
-                        height="h-64"
-                        isLoading={isVerifying}
-                        isVerified={isDocumentVerified}
-                        description="Toma una foto clara de tu INE o Pasaporte"
-                      />
-
-                      {/* Status de verificación */}
-                      {formData.documento && isDocumentVerified && (
-                        <motion.div
-                          initial={{ scale: 0.5, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          className={cn(
-                            "p-4 rounded-2xl flex items-center gap-3 border",
-                            isAdultCompanion
-                              ? "bg-amber-50 border-amber-200"
-                              : "bg-green-50 border-green-200",
-                          )}
-                        >
-                          <div
-                            className={cn(
-                              "h-10 w-10 rounded-full flex items-center justify-center text-white",
-                              isAdultCompanion
-                                ? "bg-amber-500"
-                                : "bg-green-500",
-                            )}
-                          >
-                            {isAdultCompanion ? (
-                              <Users size={20} />
-                            ) : (
-                              <CheckCircle2 size={20} />
-                            )}
-                          </div>
-                          <div className="flex-1">
-                            <p
-                              className={cn(
-                                "text-sm font-bold",
-                                isAdultCompanion
-                                  ? "text-amber-600"
-                                  : "text-green-600",
-                              )}
-                            >
-                              {isAdultCompanion
-                                ? "Adulto Acompañante"
-                                : "Edad Verificada"}
-                            </p>
-                            {isAdultCompanion && adultSpotsLeft !== null && (
-                              <p className="text-xs text-amber-500 mt-1">
-                                {adultSpotsLeft}{" "}
-                                {adultSpotsLeft === 1
-                                  ? "lugar disponible"
-                                  : "lugares disponibles"}
-                              </p>
-                            )}
-                          </div>
-                        </motion.div>
-                      )}
-
-                      {/* Error de verificación */}
-                      {formData.documento &&
-                        !isDocumentVerified &&
-                        ocrError && (
-                          <motion.div
-                            initial={{ scale: 0.5, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            className="p-4 rounded-2xl flex items-center gap-3 bg-red-50 border border-red-200"
-                          >
-                            <AlertCircle className="h-10 w-10 text-red-500" />
-                            <div>
-                              <p className="text-sm font-bold text-red-600">
-                                Validación Fallida
-                              </p>
-                              <p className="text-xs text-red-500 mt-1">
-                                {ocrError}
-                              </p>
-                            </div>
-                          </motion.div>
-                        )}
-                    </div>
-                  )}
-                </div>
+                                    <div className="space-y-4">
+                                      <div className="flex items-center gap-3 mb-2">
+                                        <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                                          <FileText size={20} />
+                                        </div>
+                                        <div>
+                                          <h2 className="text-lg font-bold text-secondary uppercase tracking-tight leading-none">
+                                            {needsResponsiva ? "Responsiva" : "Identificación"}
+                                          </h2>
+                                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-1">
+                                            {needsResponsiva
+                                              ? "Menores de 18"
+                                              : "INE, ID, Pasaporte o Documento Oficial"}
+                                          </p>
+                                        </div>
+                                      </div>
+                
+                                      {/* Carta Responsiva para menores */}
+                                      {needsResponsiva ? (
+                                        <CartaResponsivaTabs
+                                          templateUrl={cartaTemplateUrl}
+                                          templateLoading={cartaTemplateLoading}
+                                          onDownloadTemplate={handleDownloadCartaTemplate}
+                                          onFileSelect={(file) => {
+                                            setFormData({ ...formData, documento: file });
+                                            const url = URL.createObjectURL(file);
+                                            setPreviewUrl(url);
+                                            // Auto-verify para responsiva
+                                            setIsDocumentVerified(true);
+                                          }}
+                                          previewUrl={previewUrl}
+                                          fileName={formData.documento?.name}
+                                          onRemove={() => {
+                                            setFormData({ ...formData, documento: null });
+                                            setPreviewUrl(null);
+                                            setIsDocumentVerified(false);
+                                          }}
+                                          isLoading={isVerifying}
+                                        />
+                                      ) : (
+                                        /* PhotoUploadTabs para adultos (Identificación - SOLO CÁMARA) */
+                                        <div className="space-y-4">
+                                          <PhotoUploadTabs
+                                            cameraOnly={true}
+                                            onFileSelect={async (file) => {
+                                              setFormData({ ...formData, documento: file });
+                                              const url = URL.createObjectURL(file);
+                                              setPreviewUrl(url);
+                                              // Validación automática al capturar
+                                              await verifyAgeFromDocument(file);
+                                            }}
+                                            previewUrl={previewUrl}
+                                            fileName={formData.documento?.name}
+                                            onRemove={() => {
+                                              setFormData({ ...formData, documento: null });
+                                              setPreviewUrl(null);
+                                              setIsDocumentVerified(false);
+                                              setIsAdultCompanion(false);
+                                              setAdultSpotsLeft(null);
+                                            }}
+                                                                        width="w-full"
+                                                                        height="h-64"
+                                                                                                    isLoading={isVerifying}
+                                                                                                    isVerified={isDocumentVerified}
+                                                                                                    verificationMessage={isAdultCompanion ? "Adulto Acompañante" : "Edad Verificada"}
+                                                                                                    errorMessage={ocrError}
+                                                                                                    subMessage={isAdultCompanion && adultSpotsLeft !== null ? `${adultSpotsLeft} lugares disponibles` : null}
+                                                                                                    description="Captura tu INE, ID, Pasaporte o Documento Oficial"
+                                                                                                  />                                                                                                </div>
+                                                                                              )}
+                                                                                            </div>
 
                 <div className="flex gap-3">
                   <Button
@@ -1426,6 +1359,7 @@ export default function RegisterPage() {
                       setProfilePreviewUrl(null);
                     }}
                     circular={true}
+                    label="Tomarse una Foto"
                     description="Sube una foto donde se vea bien tu rostro"
                   />
                 </div>
