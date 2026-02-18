@@ -58,6 +58,7 @@ export const users = pgTable("users", {
   registrationStatus: statusEnum("registration_status")
     .default("pendiente")
     .notNull(),
+  passwordResetRequired: boolean("password_reset_required").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -105,6 +106,7 @@ export const payments = pgTable("payments", {
   method: paymentMethodEnum("method").notNull(),
   proofUrl: text("proof_url"),
   status: paymentStatusEnum("payment_status").default("pendiente").notNull(),
+  rejectionReason: text("rejection_reason"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -168,6 +170,11 @@ export const settings = pgTable("settings", {
   oxxoCardNumber: text("oxxo_card_number"),
   telegramToken: text("telegram_token"),
   telegramChatId: text("telegram_chat_id"),
+  supportPhone: text("support_phone").default("+52 (555) 123-4567"),
+  supportEmail: text("support_email").default("soporte@cngrs.mx"),
+  supportHours: text("support_hours").default(
+    "Lunes a Viernes, 9:00 AM - 6:00 PM",
+  ),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 

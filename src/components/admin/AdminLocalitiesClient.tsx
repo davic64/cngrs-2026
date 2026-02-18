@@ -1,9 +1,13 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Building2, Plus, Trash2 } from "lucide-react";
+import { Building2, Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import * as React from "react";
-import { createLocality, deleteLocality } from "@/app/actions/admin";
+import {
+  createLocality,
+  deleteLocality,
+  updateLocality,
+} from "@/app/actions/admin";
 import { DashboardCard } from "@/components/dashboard/DashboardCard";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -171,11 +175,36 @@ const ESTADOS_POR_PAIS: Record<string, { value: string; label: string }[]> = {
   ],
 };
 
+const COUNTRIES = [
+  "México",
+  "Estados Unidos",
+  "Canadá",
+  "El Salvador",
+  "Guatemala",
+  "Honduras",
+];
+
+interface Locality {
+  id: number;
+  name: string;
+  state: string;
+  country: string;
+}
+
+interface EditState {
+  name: string;
+  state: string;
+  country: string;
+  isSaving: boolean;
+}
+
 export function AdminLocalitiesClient({
   initialLocalities,
 }: {
-  initialLocalities: any[];
+  initialLocalities: Locality[];
 }) {
+  const [localities, setLocalities] =
+    React.useState<Locality[]>(initialLocalities);
   const [newLocality, setNewLocality] = React.useState({
     name: "",
     state: "",
@@ -184,24 +213,68 @@ export function AdminLocalitiesClient({
   const [showManualState, setShowManualState] = React.useState(false);
   const [isAdding, setIsAdding] = React.useState(false);
 
+  // Filter state for the list
+  const [filterCountry, setFilterCountry] = React.useState("");
+  const [filterState, setFilterState] = React.useState("");
+
+  // Edit state: maps locality id → edit data
+  const [editingId, setEditingId] = React.useState<number | null>(null);
+  const [editData, setEditData] = React.useState<EditState>({
+    name: "",
+    state: "",
+    country: "",
+    isSaving: false,
+  });
+
   const handleAdd = async () => {
     if (!newLocality.name || !newLocality.state) return;
     setIsAdding(true);
     await createLocality(newLocality);
+    setLocalities((prev) => [
+      ...prev,
+      { id: Date.now(), ...newLocality },
+    ]);
     setNewLocality({ ...newLocality, name: "", state: "" });
     setShowManualState(false);
     setIsAdding(false);
   };
 
-  // Group localities by country for better visualization
-  const countries = [
-    "México",
-    "Estados Unidos",
-    "Canadá",
-    "El Salvador",
-    "Guatemala",
-    "Honduras",
-  ];
+  const handleDelete = async (id: number) => {
+    await deleteLocality(id);
+    setLocalities((prev) => prev.filter((l) => l.id !== id));
+  };
+
+  const handleEditStart = (loc: Locality) => {
+    setEditingId(loc.id);
+    setEditData({
+      name: loc.name,
+      state: loc.state,
+      country: loc.country,
+      isSaving: false,
+    });
+  };
+
+  const handleEditSave = async (id: number) => {
+    if (!editData.name || !editData.state) return;
+    setEditData((prev) => ({ ...prev, isSaving: true }));
+    await updateLocality(id, {
+      name: editData.name,
+      state: editData.state,
+      country: editData.country,
+    });
+    setLocalities((prev) =>
+      prev.map((l) =>
+        l.id === id
+          ? { ...l, name: editData.name, state: editData.state, country: editData.country }
+          : l,
+      ),
+    );
+    setEditingId(null);
+  };
+
+  const handleEditCancel = () => {
+    setEditingId(null);
+  };
 
   const statesOptions = React.useMemo(() => {
     const options = ESTADOS_POR_PAIS[newLocality.country] || [];
@@ -210,6 +283,34 @@ export function AdminLocalitiesClient({
       { value: "Otro", label: "Otro (Escribir manualmente)" },
     ];
   }, [newLocality.country]);
+
+  // States for the selected filter country
+  const filterStateOptions = React.useMemo(() => {
+    if (!filterCountry) return [];
+    return ESTADOS_POR_PAIS[filterCountry] || [];
+  }, [filterCountry]);
+
+  // States for editing
+  const editStateOptions = React.useMemo(() => {
+    const options = ESTADOS_POR_PAIS[editData.country] || [];
+    return [
+      ...options,
+      { value: "Otro", label: "Otro (Escribir manualmente)" },
+    ];
+  }, [editData.country]);
+
+  const filteredLocalities = React.useMemo(() => {
+    return localities.filter((loc) => {
+      if (filterCountry && loc.country !== filterCountry) return false;
+      if (filterState && loc.state !== filterState) return false;
+      return true;
+    });
+  }, [localities, filterCountry, filterState]);
+
+  // Group filtered localities by country
+  const visibleCountries = filterCountry
+    ? [filterCountry]
+    : COUNTRIES;
 
   return (
     <div className="p-4 sm:p-8 space-y-8">
@@ -229,7 +330,7 @@ export function AdminLocalitiesClient({
             <div className="space-y-4">
               <Select
                 label="País"
-                options={countries.map((c) => ({ value: c, label: c }))}
+                options={COUNTRIES.map((c) => ({ value: c, label: c }))}
                 value={newLocality.country}
                 onChange={(e) =>
                   setNewLocality({
@@ -291,8 +392,41 @@ export function AdminLocalitiesClient({
 
         {/* Main: List by Country */}
         <div className="lg:col-span-8 space-y-6">
-          {countries.map((country) => {
-            const countryLocs = initialLocalities.filter(
+          {/* Filters */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex-1">
+              <Select
+                label="Filtrar por País"
+                options={[
+                  { value: "", label: "Todos los países" },
+                  ...COUNTRIES.map((c) => ({ value: c, label: c })),
+                ]}
+                value={filterCountry}
+                onChange={(e) => {
+                  setFilterCountry(e.target.value);
+                  setFilterState("");
+                }}
+              />
+            </div>
+            <div className="flex-1">
+              <Select
+                label="Filtrar por Estado"
+                options={[
+                  { value: "", label: filterCountry ? "Todos los estados" : "Selecciona un país" },
+                  ...filterStateOptions.map((s) => ({
+                    value: s.value,
+                    label: s.label,
+                  })),
+                ]}
+                value={filterState}
+                onChange={(e) => setFilterState(e.target.value)}
+                disabled={!filterCountry}
+              />
+            </div>
+          </div>
+
+          {visibleCountries.map((country) => {
+            const countryLocs = filteredLocalities.filter(
               (l) => l.country === country,
             );
             if (countryLocs.length === 0) return null;
@@ -303,40 +437,114 @@ export function AdminLocalitiesClient({
                   {country}
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {countryLocs.map((loc) => (
-                    <motion.div
-                      key={loc.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-white p-4 rounded-2xl border border-gray-100 flex items-center justify-between group hover:border-primary/20 transition-all shadow-sm"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 bg-gray-50 rounded-lg flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-                          <Building2 size={14} />
-                        </div>
-                        <div>
-                          <p className="text-xs font-black text-secondary uppercase tracking-tight">
-                            {loc.name}
-                          </p>
-                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">
-                            {loc.state}
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => deleteLocality(loc.id)}
-                        className="text-gray-300 hover:text-red-500 transition-colors p-2"
+                  {countryLocs.map((loc) =>
+                    editingId === loc.id ? (
+                      <motion.div
+                        key={loc.id}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="bg-white p-4 rounded-2xl border border-primary/30 shadow-sm space-y-3"
                       >
-                        <Trash2 size={16} />
-                      </button>
-                    </motion.div>
-                  ))}
+                        <Select
+                          label="País"
+                          options={COUNTRIES.map((c) => ({
+                            value: c,
+                            label: c,
+                          }))}
+                          value={editData.country}
+                          onChange={(e) =>
+                            setEditData({
+                              ...editData,
+                              country: e.target.value,
+                              state: "",
+                            })
+                          }
+                        />
+                        <SearchableSelect
+                          label="Estado"
+                          placeholder="Selecciona estado..."
+                          options={editStateOptions}
+                          value={editData.state}
+                          onChange={(val) =>
+                            setEditData({
+                              ...editData,
+                              state: val === "Otro" ? "" : val,
+                            })
+                          }
+                        />
+                        <Input
+                          label="Nombre"
+                          value={editData.name}
+                          onChange={(e) =>
+                            setEditData({ ...editData, name: e.target.value })
+                          }
+                        />
+                        <div className="flex gap-2 pt-1">
+                          <Button
+                            className="flex-1 h-9 text-xs"
+                            onClick={() => handleEditSave(loc.id)}
+                            disabled={
+                              editData.isSaving ||
+                              !editData.name ||
+                              !editData.state
+                            }
+                          >
+                            <Check size={14} className="mr-1" />
+                            {editData.isSaving ? "Guardando..." : "Guardar"}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="h-9 px-3"
+                            onClick={handleEditCancel}
+                            disabled={editData.isSaving}
+                          >
+                            <X size={14} />
+                          </Button>
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key={loc.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-white p-4 rounded-2xl border border-gray-100 flex items-center justify-between group hover:border-primary/20 transition-all shadow-sm"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 bg-gray-50 rounded-lg flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+                            <Building2 size={14} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-black text-secondary uppercase tracking-tight">
+                              {loc.name}
+                            </p>
+                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">
+                              {loc.state}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleEditStart(loc)}
+                            className="text-gray-300 hover:text-primary transition-colors p-2"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(loc.id)}
+                            className="text-gray-300 hover:text-red-500 transition-colors p-2"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </motion.div>
+                    ),
+                  )}
                 </div>
               </div>
             );
           })}
 
-          {initialLocalities.length === 0 && (
+          {filteredLocalities.length === 0 && (
             <div className="py-20 text-center bg-white rounded-[3rem] border-2 border-dashed border-gray-100">
               <Building2 size={48} className="text-gray-100 mx-auto mb-4" />
               <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">

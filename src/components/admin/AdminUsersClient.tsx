@@ -3,9 +3,12 @@
 import {
   AlertCircle,
   CheckCircle2,
+  Clock,
+  CreditCard,
   ExternalLink,
   Eye,
   FileText,
+  Lock,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -14,11 +17,19 @@ import {
   deleteUser,
   updateUserDetails,
   updateUserDocument,
+  generateTemporaryPassword,
 } from "@/app/actions/admin";
 import { DashboardCard } from "@/components/dashboard/DashboardCard";
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
 import { Input } from "@/components/ui/Input";
+import {
+  Modal,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+} from "@/components/ui/Modal";
 import { cn } from "@/lib/utils";
 
 interface AdminUsersClientProps {
@@ -29,6 +40,11 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
   const [searchTerm, setSearchTerm] = React.useState("");
   const [selectedUser, setSelectedUser] = React.useState<any>(null);
   const [isUploading, setIsUploading] = React.useState(false);
+  const [showPasswordResetModal, setShowPasswordResetModal] =
+    React.useState(false);
+  const [isResettingPassword, setIsResettingPassword] = React.useState(false);
+  const [resetError, setResetError] = React.useState("");
+  const [tempPassword, setTempPassword] = React.useState("");
 
   const filteredUsers = initialUsers.filter(
     (u) =>
@@ -69,6 +85,33 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
       alert("Error al subir el archivo.");
     }
     setIsUploading(false);
+  };
+
+  const handleResetPassword = async () => {
+    if (!selectedUser) return;
+    setResetError("");
+    setIsResettingPassword(true);
+
+    const result = await generateTemporaryPassword(selectedUser.id);
+
+    if (result.success) {
+      setTempPassword(result.tempPassword ?? "");
+    } else {
+      setResetError(result.error || "Error al generar contraseña temporal");
+      setIsResettingPassword(false);
+    }
+  };
+
+  const handleCopyPassword = () => {
+    navigator.clipboard.writeText(tempPassword);
+    alert("Contraseña copiada al portapapeles");
+  };
+
+  const handleClosePasswordModal = () => {
+    setShowPasswordResetModal(false);
+    setTempPassword("");
+    setResetError("");
+    setIsResettingPassword(false);
   };
 
   return (
@@ -175,6 +218,13 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
           selectedUser && (
             <div className="flex flex-col gap-3">
               <div className="flex gap-3 w-full">
+                <Button
+                  variant="outline"
+                  className="flex-1 border-amber-100 text-amber-600 hover:bg-amber-50 rounded-2xl h-12 font-black uppercase text-[10px] tracking-widest transition-all"
+                  onClick={() => setShowPasswordResetModal(true)}
+                >
+                  <Lock size={16} className="mr-2" /> Resetear Contraseña
+                </Button>
                 <Button
                   variant="outline"
                   className="flex-1 border-red-100 text-red-500 hover:bg-red-50 rounded-2xl h-12 font-black uppercase text-[10px] tracking-widest transition-all"
@@ -305,6 +355,134 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
               </div>
             </div>
 
+            {/* Payments Section */}
+            <div className="space-y-4">
+              <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.2em] ml-2">
+                Historial de Pagos
+              </h4>
+              <div className="space-y-3">
+                {selectedUser.payments?.length > 0 ? (
+                  [...selectedUser.payments]
+                    .sort(
+                      (a: any, b: any) =>
+                        new Date(b.createdAt).getTime() -
+                        new Date(a.createdAt).getTime(),
+                    )
+                    .map((payment: any) => {
+                      const statusConfig: Record<
+                        string,
+                        {
+                          label: string;
+                          textColor: string;
+                          bgColor: string;
+                          icon: React.ReactNode;
+                        }
+                      > = {
+                        completado: {
+                          label: "Aprobado",
+                          textColor: "text-green-600",
+                          bgColor: "bg-green-50",
+                          icon: <CheckCircle2 size={16} />,
+                        },
+                        revision: {
+                          label: "En Revisión",
+                          textColor: "text-amber-600",
+                          bgColor: "bg-amber-50",
+                          icon: <Clock size={16} />,
+                        },
+                        pendiente: {
+                          label: "Pendiente",
+                          textColor: "text-gray-400",
+                          bgColor: "bg-gray-100",
+                          icon: <Clock size={16} />,
+                        },
+                        rechazado: {
+                          label: "Rechazado",
+                          textColor: "text-red-500",
+                          bgColor: "bg-red-50",
+                          icon: <AlertCircle size={16} />,
+                        },
+                      };
+                      const typeLabel: Record<string, string> = {
+                        completo: "Pago Completo",
+                        inscripcion: "Inscripción",
+                      };
+                      const methodLabel: Record<string, string> = {
+                        tarjeta: "Tarjeta",
+                        transferencia: "Transferencia",
+                        efectivo: "Efectivo",
+                      };
+                      const status =
+                        statusConfig[payment.status] ?? statusConfig.pendiente;
+                      return (
+                        <div
+                          key={payment.id}
+                          className="bg-white border border-gray-100 rounded-[2rem] p-5 shadow-sm flex items-center justify-between gap-4"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div
+                              className={cn(
+                                "h-10 w-10 rounded-2xl flex items-center justify-center shrink-0",
+                                status.bgColor,
+                                status.textColor,
+                              )}
+                            >
+                              <CreditCard size={18} />
+                            </div>
+                            <div>
+                              <p className="text-sm font-black text-secondary uppercase tracking-tight">
+                                ${payment.amount.toLocaleString("es-MX")} MXN
+                              </p>
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                {typeLabel[payment.type] ?? payment.type} •{" "}
+                                {methodLabel[payment.method] ?? payment.method}
+                              </p>
+                              <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-0.5">
+                                {new Date(payment.createdAt).toLocaleDateString(
+                                  "es-MX",
+                                  {
+                                    day: "2-digit",
+                                    month: "short",
+                                    year: "numeric",
+                                  },
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span
+                              className={cn(
+                                "text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-xl",
+                                status.bgColor,
+                                status.textColor,
+                              )}
+                            >
+                              {status.label}
+                            </span>
+                            {payment.proofUrl && (
+                              <a
+                                href={payment.proofUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="h-8 w-8 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-400 hover:text-primary hover:border-primary/20 transition-all"
+                              >
+                                <ExternalLink size={13} />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                ) : (
+                  <div className="bg-white border border-gray-100 rounded-[2rem] p-6 text-center">
+                    <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">
+                      Sin pagos registrados
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Documents Section */}
             <div className="space-y-4 pb-4">
               <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.2em] ml-2">
@@ -398,6 +576,133 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
           </div>
         )}
       </Drawer>
+
+      {/* PASSWORD RESET MODAL */}
+      <Modal isOpen={showPasswordResetModal} onClose={handleClosePasswordModal}>
+        <ModalHeader onClose={handleClosePasswordModal}>
+          <ModalTitle className="text-2xl font-black uppercase tracking-tighter text-center">
+            Resetear <span className="text-primary">Contraseña</span>
+          </ModalTitle>
+        </ModalHeader>
+        <ModalContent className="pt-4 space-y-6">
+          {tempPassword ? (
+            <div className="space-y-4">
+              <div className="bg-green-50 rounded-xl p-4 border border-green-200 flex gap-3">
+                <CheckCircle2
+                  size={20}
+                  className="text-green-600 shrink-0 mt-0.5"
+                />
+                <div>
+                  <p className="text-sm font-black text-green-700 mb-1">
+                    ¡Contraseña Generada!
+                  </p>
+                  <p className="text-xs text-green-600/70 leading-relaxed">
+                    Se ha generado una contraseña temporal. El usuario deberá
+                    cambiarla en su próximo inicio de sesión.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                <p className="text-xs font-black text-gray-500 mb-2 uppercase tracking-widest">
+                  Contraseña Temporal:
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 font-mono text-sm font-bold text-secondary bg-white rounded-lg px-3 py-2 border border-gray-200">
+                    {tempPassword}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyPassword}
+                    className="rounded-lg"
+                  >
+                    Copiar
+                  </Button>
+                </div>
+                <p className="text-[10px] text-gray-400 mt-2">
+                  Comparte esta contraseña con el usuario de forma segura.
+                </p>
+              </div>
+
+              <div className="bg-blue-50 rounded-xl p-3 border border-blue-200 flex gap-3">
+                <AlertCircle
+                  size={18}
+                  className="text-blue-600 shrink-0 mt-0.5"
+                />
+                <div>
+                  <p className="text-[10px] font-bold text-blue-700 uppercase tracking-widest mb-1">
+                    Próximos Pasos:
+                  </p>
+                  <ul className="text-[10px] text-blue-600/70 space-y-1 list-disc ml-4">
+                    <li>Comunica la contraseña temporal al usuario</li>
+                    <li>El usuario deberá cambiarla al ingresar</li>
+                    <li>
+                      Se forzará el cambio de contraseña en el primer login
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="bg-amber-50 rounded-xl p-4 border border-amber-200 flex gap-3">
+                <AlertCircle
+                  size={20}
+                  className="text-amber-600 shrink-0 mt-0.5"
+                />
+                <div>
+                  <p className="text-sm font-black text-amber-700 mb-1">
+                    Acción Irreversible
+                  </p>
+                  <p className="text-xs text-amber-600/70 leading-relaxed">
+                    Al resetear la contraseña, se generará una contraseña
+                    temporal. El usuario deberá crear una nueva contraseña en su
+                    próximo inicio de sesión.
+                  </p>
+                </div>
+              </div>
+
+              {resetError && (
+                <div className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl text-center uppercase tracking-widest">
+                  {resetError}
+                </div>
+              )}
+
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                <p className="text-sm font-black text-secondary mb-3">
+                  Usuario:
+                </p>
+                <p className="text-base font-bold text-secondary">
+                  {selectedUser?.firstName} {selectedUser?.lastName}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {selectedUser?.phone}
+                </p>
+              </div>
+            </div>
+          )}
+        </ModalContent>
+        <ModalFooter>
+          <Button
+            variant="outline"
+            className="flex-1 rounded-xl"
+            disabled={isResettingPassword || !!tempPassword}
+            onClick={handleClosePasswordModal}
+          >
+            {tempPassword ? "Listo" : "Cancelar"}
+          </Button>
+          {!tempPassword && (
+            <Button
+              className="flex-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white shadow-lg shadow-amber-600/20"
+              disabled={isResettingPassword}
+              onClick={handleResetPassword}
+            >
+              {isResettingPassword ? "Generando..." : "Generar Contraseña"}
+            </Button>
+          )}
+        </ModalFooter>
+      </Modal>
     </div>
   );
 }

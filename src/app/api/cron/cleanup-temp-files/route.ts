@@ -8,10 +8,7 @@ export async function GET(req: Request) {
     const expectedToken = process.env.CRON_SECRET;
 
     if (!expectedToken || authHeader !== `Bearer ${expectedToken}`) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     console.log("🧹 Iniciando limpieza de archivos temporales expirados...");
@@ -27,7 +24,7 @@ export async function GET(req: Request) {
     console.error("Error en cron job cleanup-temp-files:", error);
     return NextResponse.json(
       { error: "Internal Server Error", details: String(error) },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

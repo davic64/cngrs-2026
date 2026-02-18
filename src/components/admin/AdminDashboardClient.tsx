@@ -89,7 +89,9 @@ export function AdminDashboardClient({
   const [isSaving, setIsSaving] = React.useState(false);
 
   // Carta Responsiva
-  const [cartaUrl, setCartaUrl] = React.useState<string | null>(cartaResponsivaUrl);
+  const [cartaUrl, setCartaUrl] = React.useState<string | null>(
+    cartaResponsivaUrl,
+  );
   const [cartaFile, setCartaFile] = React.useState<File | null>(null);
   const [isUploadingCarta, setIsUploadingCarta] = React.useState(false);
   const cartaInputRef = React.useRef<HTMLInputElement>(null);

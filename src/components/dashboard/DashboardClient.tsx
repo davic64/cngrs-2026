@@ -699,7 +699,7 @@ export function DashboardClient({
                       <input
                         type="file"
                         className="hidden"
-                        accept="image/*,application/pdf"
+                        accept="image/jpeg,image/png,image/webp"
                         onChange={(e) =>
                           setPaymentFile(e.target.files?.[0] || null)
                         }

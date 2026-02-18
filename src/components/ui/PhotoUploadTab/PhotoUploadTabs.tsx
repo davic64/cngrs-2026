@@ -57,9 +57,13 @@ export function PhotoUploadTabs({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validar que sea una imagen
-      if (!file.type.startsWith("image/")) {
-        alert("Solo se permiten archivos de imagen (JPG, PNG, WebP)");
+      // Validar que sea una imagen (incluyendo HEIC/HEIF de iOS)
+      const isImage =
+        file.type.startsWith("image/") ||
+        file.name.toLowerCase().endsWith(".heic") ||
+        file.name.toLowerCase().endsWith(".heif");
+      if (!isImage) {
+        alert("Solo se permiten archivos de imagen (JPG, PNG, WebP, HEIC)");
         return;
       }
       onFileSelect(file);
@@ -74,7 +78,9 @@ export function PhotoUploadTabs({
         <div
           className={cn(
             "relative overflow-hidden border-4 border-primary/20 shadow-xl mx-auto",
-            circular ? `aspect-square rounded-full w-48 h-48` : `aspect-[1.58/1] rounded-3xl ${width}`,
+            circular
+              ? `aspect-square rounded-full w-48 h-48`
+              : `aspect-[1.58/1] rounded-3xl ${width}`,
           )}
         >
           <img
@@ -87,14 +93,16 @@ export function PhotoUploadTabs({
           {isLoading && (
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center text-white z-10">
               <div className="h-10 w-10 border-4 border-white/30 border-t-white rounded-full animate-spin mb-2" />
-              <p className="text-[10px] font-black uppercase tracking-widest">Verificando...</p>
+              <p className="text-[10px] font-black uppercase tracking-widest">
+                Verificando...
+              </p>
             </div>
           )}
 
           {/* Verified Overlay */}
           {isVerified && !isLoading && (
             <div className="absolute inset-0 bg-black/5 flex items-center justify-center pointer-events-none p-4">
-               <div className="bg-green-500/90 backdrop-blur-sm text-white px-4 py-2 rounded-full shadow-2xl flex items-center gap-2 animate-in zoom-in duration-300">
+              <div className="bg-green-500/90 backdrop-blur-sm text-white px-4 py-2 rounded-full shadow-2xl flex items-center gap-2 animate-in zoom-in duration-300">
                 <CheckCircle2 className="h-5 w-5" />
                 <div className="flex flex-col">
                   <span className="text-[10px] font-black uppercase tracking-widest leading-none">
@@ -113,7 +121,7 @@ export function PhotoUploadTabs({
           {/* Error Overlay */}
           {!isVerified && !isLoading && errorMessage && (
             <div className="absolute inset-0 bg-red-500/10 backdrop-blur-[2px] flex items-center justify-center p-4 z-20">
-               <div className="bg-red-500/90 backdrop-blur-sm text-white px-4 py-3 rounded-2xl shadow-2xl flex flex-col items-center gap-1 animate-in zoom-in duration-300 text-center max-w-[80%]">
+              <div className="bg-red-500/90 backdrop-blur-sm text-white px-4 py-3 rounded-2xl shadow-2xl flex flex-col items-center gap-1 animate-in zoom-in duration-300 text-center max-w-[80%]">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="h-5 w-5" />
                   <span className="text-[10px] font-black uppercase tracking-widest">
@@ -159,7 +167,7 @@ export function PhotoUploadTabs({
             disabled={isLoading}
             className={cn(
               "flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-200 hover:border-primary/50 hover:bg-primary/5 transition-all disabled:opacity-50",
-              circular ? "aspect-square rounded-full" : "rounded-2xl"
+              circular ? "aspect-square rounded-full" : "rounded-2xl",
             )}
           >
             <Camera className="h-6 w-6 text-primary" />
@@ -173,7 +181,7 @@ export function PhotoUploadTabs({
             disabled={isLoading}
             className={cn(
               "flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-200 hover:border-primary/50 hover:bg-primary/5 transition-all disabled:opacity-50",
-              circular ? "aspect-square rounded-full" : "rounded-2xl"
+              circular ? "aspect-square rounded-full" : "rounded-2xl",
             )}
           >
             <Image className="h-6 w-6 text-primary" />
@@ -204,7 +212,9 @@ export function PhotoUploadTabs({
       <label
         className={cn(
           "flex flex-col items-center justify-center border-4 border-dashed border-gray-200 cursor-pointer hover:bg-gray-50 transition-all hover:border-primary/30",
-          circular ? "aspect-square rounded-full w-48 h-48" : "aspect-[1.58/1] rounded-3xl w-full",
+          circular
+            ? "aspect-square rounded-full w-48 h-48"
+            : "aspect-[1.58/1] rounded-3xl w-full",
           isLoading && "opacity-50 pointer-events-none",
         )}
       >

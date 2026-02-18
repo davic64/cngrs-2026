@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { checkCartaResponsivaExists, getCartaResponsivaUrl } from "@/lib/storage";
+import {
+  checkCartaResponsivaExists,
+  getCartaResponsivaUrl,
+} from "@/lib/storage";
 
 export async function GET() {
   const exists = await checkCartaResponsivaExists();
@@ -19,7 +22,8 @@ export async function GET() {
   return new NextResponse(buffer, {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": 'attachment; filename="Carta_Responsiva_Plantilla.pdf"',
+      "Content-Disposition":
+        'attachment; filename="Carta_Responsiva_Plantilla.pdf"',
     },
   });
 }

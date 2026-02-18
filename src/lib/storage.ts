@@ -85,7 +85,9 @@ export async function confirmTemporaryFiles(sessionId: string) {
       .delete(temporaryFiles)
       .where(eq(temporaryFiles.sessionId, sessionId));
 
-    console.log(`✅ Archivos confirmados y tracking eliminado para sesión: ${sessionId}`);
+    console.log(
+      `✅ Archivos confirmados y tracking eliminado para sesión: ${sessionId}`,
+    );
     return { success: true };
   } catch (error) {
     console.error("Error confirming temporary files:", error);

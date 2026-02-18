@@ -19,6 +19,10 @@ export default async function DashboardPage() {
     redirect("/auth/login");
   }
 
+  if (user.role === "admin") {
+    redirect("/admin/dashboard");
+  }
+
   return (
     <DashboardClient
       user={user}

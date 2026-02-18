@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Clock, FileText } from "lucide-react";
+import { Clock, FileText, AlertCircle } from "lucide-react";
 import * as React from "react";
 import { validatePayment } from "@/app/actions/admin";
 import { DashboardCard } from "@/components/dashboard/DashboardCard";
@@ -21,22 +21,40 @@ interface PaymentsClientProps {
 export function PaymentsClient({ initialPayments }: PaymentsClientProps) {
   const [selectedPayment, setSelectedPayment] = React.useState<any>(null);
   const [isProcessing, setIsProcessing] = React.useState(false);
+  const [showRejectionModal, setShowRejectionModal] = React.useState(false);
+  const [rejectionReason, setRejectionReason] = React.useState("");
 
   const handleValidation = async (status: "completado" | "rechazado") => {
     if (!selectedPayment) return;
+
+    if (status === "rechazado" && !rejectionReason.trim()) {
+      alert("Por favor, ingresa una razón para el rechazo.");
+      return;
+    }
+
     setIsProcessing(true);
 
-    const result = await validatePayment(selectedPayment.id, status);
+    const result = await validatePayment(
+      selectedPayment.id,
+      status,
+      status === "rechazado" ? rejectionReason : undefined,
+    );
 
     if (result.success) {
       alert(
         `Pago ${status === "completado" ? "aprobado" : "rechazado"} correctamente.`,
       );
       setSelectedPayment(null);
+      setShowRejectionModal(false);
+      setRejectionReason("");
     } else {
       alert("Error al procesar la validación.");
     }
     setIsProcessing(false);
+  };
+
+  const handleRejectClick = () => {
+    setShowRejectionModal(true);
   };
 
   return (
@@ -156,7 +174,7 @@ export function PaymentsClient({ initialPayments }: PaymentsClientProps) {
             variant="outline"
             className="flex-1 text-red-500 hover:bg-red-50"
             disabled={isProcessing}
-            onClick={() => handleValidation("rechazado")}
+            onClick={handleRejectClick}
           >
             Rechazar
           </Button>
@@ -166,6 +184,69 @@ export function PaymentsClient({ initialPayments }: PaymentsClientProps) {
             onClick={() => handleValidation("completado")}
           >
             {isProcessing ? "Procesando..." : "Aprobar Pago"}
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* Rejection Reason Modal */}
+      <Modal
+        isOpen={showRejectionModal}
+        onClose={() => setShowRejectionModal(false)}
+      >
+        <ModalHeader onClose={() => setShowRejectionModal(false)}>
+          <ModalTitle className="text-2xl font-black uppercase tracking-tighter text-center">
+            Rechazar <span className="text-primary">Comprobante</span>
+          </ModalTitle>
+        </ModalHeader>
+        <ModalContent className="space-y-6 pt-4">
+          <div className="bg-red-50 rounded-xl p-4 border border-red-200 flex gap-3">
+            <AlertCircle size={20} className="text-red-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-black text-red-700 mb-2">
+                Razón requerida
+              </p>
+              <p className="text-xs text-red-600/70 leading-relaxed">
+                Por favor, explica brevemente por qué rechazas este comprobante.
+                El usuario recibirá esta información.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <label className="block">
+              <p className="text-xs font-black text-secondary mb-2 uppercase tracking-widest">
+                Motivo del rechazo
+              </p>
+              <textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Ej: La imagen del comprobante no es clara, el monto no coincide, etc."
+                className="w-full h-24 rounded-xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+              />
+            </label>
+            <p className="text-[10px] text-gray-400">
+              Mínimo 10 caracteres. Sé específico para ayudar al usuario.
+            </p>
+          </div>
+        </ModalContent>
+        <ModalFooter className="flex gap-3">
+          <Button
+            variant="outline"
+            className="flex-1"
+            disabled={isProcessing}
+            onClick={() => {
+              setShowRejectionModal(false);
+              setRejectionReason("");
+            }}
+          >
+            Cancelar
+          </Button>
+          <Button
+            className="flex-1 bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-600/20"
+            disabled={isProcessing || rejectionReason.trim().length < 10}
+            onClick={() => handleValidation("rechazado")}
+          >
+            {isProcessing ? "Rechazando..." : "Confirmar Rechazo"}
           </Button>
         </ModalFooter>
       </Modal>

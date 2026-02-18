@@ -38,9 +38,11 @@ All data mutations go through **Server Actions** in `src/app/actions/`. Pages ar
 
 ### Key Architectural Decisions
 
-**Authentication**: Cookie-based sessions only. The `user_session` cookie holds the user's UUID directly (no JWT). `getSessionUser()` in `auth.ts` reads this cookie and returns the full user object. There is no middleware protecting routes — the dashboard layout checks the session client-side and redirects if needed.
+**Authentication**: Cookie-based sessions only. The `user_session` cookie holds the user's UUID directly (no JWT). `getSessionUser()` in `auth.ts` reads this cookie and returns the full user object. There is no middleware protecting routes — the dashboard layout checks the session server-side and redirects if needed.
 
-**Roles**: Two roles — `admin` and `user`. Admins are stored in the same `users` table with `role = 'admin'`. The dashboard layout redirects admins to `/admin/dashboard` on mount.
+**Roles**: Two roles — `admin` and `user`. Admins are stored in the same `users` table with `role = 'admin'`. The dashboard layout redirects admins to `/admin/dashboard`.
+
+**Forgot password flow**: User requests a reset via modal in the login page (`sendPasswordResetRequest()` in `password-reset.ts`) → sends a Telegram notification to admin. Admin generates a temporary password from the admin panel (`generateTemporaryPassword()` in `admin.ts`), which sets `passwordResetRequired = true` on the user and returns the temp password for the admin to share manually. When the user logs in with the temp password, the dashboard layout detects `passwordResetRequired = true` and redirects to `/auth/change-password`. That page (`ChangePasswordClient`) forces the user to set a new password, then clears the flag via `changePassword()` in `auth.ts`.
 
 **File Storage**: All uploads go to **Cloudflare R2** (S3-compatible). `src/lib/storage.ts` contains all R2 logic. Files are organized into folders: `Perfil/`, `Identificación/`, `Carta Responsiva/`, `Pagos/`, `templates/`. The *Carta Responsiva* template lives at the fixed path `templates/carta-responsiva.pdf` in R2 (no DB tracking).
 
@@ -59,7 +61,7 @@ src/
   app/
     actions/          # All Server Actions (auth, admin, stripe, ocr, support, events, venue, notifications)
     admin/            # Admin panel pages (server components → pass data to components/admin/*)
-    auth/             # Login & registration pages
+    auth/             # Login, registration & change-password pages
     dashboard/        # User dashboard pages (server components → pass data to components/dashboard/*)
     api/
       webhook/stripe/ # Stripe webhook handler

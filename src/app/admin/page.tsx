@@ -1,14 +1,16 @@
-"use client";
+import { redirect } from "next/navigation";
+import { getSessionUser } from "@/app/actions/auth";
 
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+export default async function AdminPage() {
+  const user = await getSessionUser();
 
-export default function AdminPage() {
-  const router = useRouter();
+  if (!user) {
+    redirect("/auth/login");
+  }
 
-  useEffect(() => {
-    router.push("/admin/dashboard");
-  }, [router]);
+  if (user.role !== "admin") {
+    redirect("/dashboard");
+  }
 
-  return null;
+  redirect("/admin/dashboard");
 }

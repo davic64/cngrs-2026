@@ -20,6 +20,7 @@ export async function loginUser(formData: FormData) {
   try {
     const phone = formData.get("telefono") as string;
     const password = formData.get("password") as string;
+    const rememberMe = formData.get("rememberMe") === "true";
 
     const [user] = await db.select().from(users).where(eq(users.phone, phone));
 
@@ -34,11 +35,16 @@ export async function loginUser(formData: FormData) {
     }
 
     const cookieStore = await cookies();
+
+    // Si rememberMe está activado: 30 días
+    // Si no: solo para esta sesión del navegador (se elimina al cerrar)
+    const maxAge = rememberMe ? 60 * 60 * 24 * 30 : undefined;
+
     cookieStore.set("user_session", user.id, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: maxAge,
       path: "/",
     });
 
@@ -184,7 +190,8 @@ export async function registerUser(formData: FormData) {
         await db
           .update(users)
           .set({
-            registrationStatus: tipoPago === "completo" ? "completado" : "parcial",
+            registrationStatus:
+              tipoPago === "completo" ? "completado" : "parcial",
           })
           .where(eq(users.id, user.id));
       } else if (metodoPago !== "tarjeta" && proofUrl) {
@@ -255,7 +262,7 @@ export async function setRegistrationSession(userId: string) {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: undefined,
       path: "/",
     });
 
@@ -290,13 +297,13 @@ export async function submitRegistrationProof(
       proofUrl: url,
     });
 
-    // Settear cookie de sesión
+    // Settear cookie de sesión (solo para esta sesión del navegador)
     const cookieStore = await cookies();
     cookieStore.set("user_session", userId, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: undefined,
       path: "/",
     });
 
@@ -451,5 +458,60 @@ export async function getCartaResponsivaTemplate() {
     return { success: true, templateUrl: getCartaResponsivaUrl() };
   } catch {
     return { success: false, error: "Error al obtener la plantilla" };
+  }
+}
+
+// --- PASSWORD CHANGE MANAGEMENT ---
+export async function changePassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+) {
+  try {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+    });
+
+    if (!user) {
+      return { success: false, error: "Usuario no encontrado" };
+    }
+
+    // Verify current password
+    const isPasswordValid = await bcrypt.compare(
+      currentPassword,
+      user.password,
+    );
+
+    if (!isPasswordValid) {
+      return { success: false, error: "Contraseña actual incorrecta" };
+    }
+
+    // Validate new password
+    if (newPassword.length < 6) {
+      return {
+        success: false,
+        error: "La nueva contraseña debe tener al menos 6 caracteres",
+      };
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password and clear passwordResetRequired flag
+    await db
+      .update(users)
+      .set({
+        password: hashedPassword,
+        passwordResetRequired: false,
+      })
+      .where(eq(users.id, userId));
+
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/profile");
+
+    return { success: true, message: "Contraseña actualizada correctamente" };
+  } catch (error) {
+    console.error("Error changing password:", error);
+    return { success: false, error: "Error al cambiar la contraseña" };
   }
 }

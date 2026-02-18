@@ -26,15 +26,19 @@ import {
   registerUser,
   uploadRegistrationFiles,
   getCartaResponsivaTemplate,
+  setRegistrationSession,
 } from "@/app/actions/auth";
-import { verifyDocumentAge } from "@/app/actions/ocr";
-import { createCheckoutSession } from "@/app/actions/stripe";
+import {
+  createCheckoutSession,
+  recordNewRegistrationPayment,
+} from "@/app/actions/stripe";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { PhotoUploadTabs } from "@/components/ui/PhotoUploadTab/PhotoUploadTabs";
 import { CartaResponsivaTabs } from "@/components/ui/CartaResponsivaTabs/CartaResponsivaTabs";
 import { EditorResultRenderer } from "@/components/ui/EditorResultRenderer";
 import { Input } from "@/components/ui/Input";
+import { PaymentProofCapture } from "@/components/ui/PaymentProofCapture";
 import {
   Modal,
   ModalContent,
@@ -305,7 +309,6 @@ export default function RegisterPage() {
     React.useState(false);
   const [detectedAge, setDetectedAge] = React.useState<number | null>(null);
   const [isProcessing, setIsProcessing] = React.useState(false);
-  const [isVerifying, setIsVerifying] = React.useState(false);
   const [paymentStatus, setPaymentStatus] = React.useState<
     "success" | "error" | null
   >(null);
@@ -316,11 +319,6 @@ export default function RegisterPage() {
   const [showManualEstado, setShowManualEstado] = React.useState(false);
   const [showManualLocalidad, setShowManualLocalidad] = React.useState(false);
   const [isDocumentVerified, setIsDocumentVerified] = React.useState(false);
-  const [isAdultCompanion, setIsAdultCompanion] = React.useState(false);
-  const [adultSpotsLeft, setAdultSpotsLeft] = React.useState<number | null>(
-    null,
-  );
-  const [ocrError, setOcrError] = React.useState<string | null>(null);
   const [isCompletingRegistration, setIsCompletingRegistration] =
     React.useState(false);
   const [cartaTemplateUrl, setCartaTemplateUrl] = React.useState<string | null>(
@@ -432,17 +430,20 @@ export default function RegisterPage() {
     return [...states, { value: "Otro", label: "Otro (Escribir)" }];
   }, [formData.pais]);
 
-  // Filter localities based on selected country
+  // Filter localities based on selected country AND state
   const filteredLocalities = React.useMemo(() => {
     const options = dbLocalities
-      .filter((loc) => loc.country === formData.pais)
+      .filter(
+        (loc) =>
+          loc.country === formData.pais && loc.state === formData.estado,
+      )
       .map((loc) => ({ value: loc.name, label: loc.name }));
 
     return [
       ...options,
       { value: "Otro", label: "Mi localidad no aparece (Escribir)" },
     ];
-  }, [dbLocalities, formData.pais]);
+  }, [dbLocalities, formData.pais, formData.estado]);
 
   // Validaciones
   const isStep1Valid =
@@ -550,49 +551,79 @@ export default function RegisterPage() {
       return;
     }
 
-    // Construir FormData solo con texto + URLs pre-subidas (sin archivos)
-    const data = new FormData();
-    data.append("nombre", saved.nombre || "");
-    data.append("apellido", saved.apellido || "");
-    data.append("telefono", saved.telefono || "");
-    data.append("password", saved.password || "");
-    data.append("edad", saved.edad || "");
-    data.append("genero", saved.genero || "");
-    data.append("tallaPlayera", saved.tallaPlayera || "");
-    data.append(
-      "pais",
-      saved.pais === "Otro" ? saved.otroPais || "" : saved.pais || "",
-    );
-    data.append("estado", saved.estado || "");
-    data.append("localidad", saved.localidad || "");
-    data.append("alergias", saved.alergias || "");
-    data.append("padecimiento", saved.padecimiento || "");
-    data.append("medicamento", saved.medicamento || "");
-    data.append("dosisFrecuencia", saved.dosisFrecuencia || "");
-    if (saved.contactoEmergencia) {
-      data.append("contactoNombre", saved.contactoEmergencia.nombre);
-      data.append("contactoTelefono", saved.contactoEmergencia.telefono);
-    }
-    data.append("tipoPago", saved.tipoPago || "");
-    data.append("metodoPago", saved.metodoPago || "");
-    data.append("stripeSessionId", sessionId);
-    // URLs de archivos ya subidos a R2 antes de Stripe
-    if (saved.profilePhotoUrl)
-      data.append("profilePhotoUrl", saved.profilePhotoUrl);
-    if (saved.documentUrl) data.append("documentUrl", saved.documentUrl);
-    if (saved.sessionId) data.append("sessionId", saved.sessionId);
+    try {
+      // 1. Crear usuario primero
+      const userData = new FormData();
+      userData.append("nombre", saved.nombre || "");
+      userData.append("apellido", saved.apellido || "");
+      userData.append("telefono", saved.telefono || "");
+      userData.append("password", saved.password || "");
+      userData.append("edad", saved.edad || "");
+      userData.append("genero", saved.genero || "");
+      userData.append("tallaPlayera", saved.tallaPlayera || "");
+      userData.append(
+        "pais",
+        saved.pais === "Otro" ? saved.otroPais || "" : saved.pais || "",
+      );
+      userData.append("estado", saved.estado || "");
+      userData.append("localidad", saved.localidad || "");
+      userData.append("alergias", saved.alergias || "");
+      userData.append("padecimiento", saved.padecimiento || "");
+      userData.append("medicamento", saved.medicamento || "");
+      userData.append("dosisFrecuencia", saved.dosisFrecuencia || "");
+      if (saved.contactoEmergencia) {
+        userData.append("contactoNombre", saved.contactoEmergencia.nombre);
+        userData.append("contactoTelefono", saved.contactoEmergencia.telefono);
+      }
+      userData.append("tipoPago", "tarjeta");
+      userData.append("metodoPago", "tarjeta");
+      // No incluir stripeSessionId aquí - solo registrar el usuario sin pago
+      userData.append("skipCookie", "true"); // No setear cookie aún
+      // URLs de archivos ya subidos
+      if (saved.profilePhotoUrl)
+        userData.append("profilePhotoUrl", saved.profilePhotoUrl);
+      if (saved.documentUrl) userData.append("documentUrl", saved.documentUrl);
+      if (saved.sessionId) userData.append("sessionId", saved.sessionId);
 
-    const result = await registerUser(data);
+      const userResult = await registerUser(userData);
 
-    if (result.success) {
-      // Registrar el pago de Stripe en el historial del usuario
-      // Importamos payments desde el esquema si es necesario, pero aquí usamos registerUser que es una Server Action.
-      // Sin embargo, como estamos en un componente Client, debemos asegurarnos de que el registro del pago ocurra en el servidor.
-      // Modificaré mejor la acción registerUser para que ella se encargue de registrar el pago si viene un stripeSessionId.
+      if (!userResult.success || !userResult.userId) {
+        throw new Error(userResult.error || "No se pudo crear el usuario");
+      }
+
+      const userId = userResult.userId;
+      console.log(`✅ Usuario creado: ${userId}`);
+
+      // 2. Registrar el pago de Stripe
+      const paymentResult = await recordNewRegistrationPayment(
+        userId,
+        sessionId,
+        parseInt(saved.baseAmount || saved.registrationFeePrice || "500", 10),
+        saved.tipoPago === "completo" ? "completo" : "inscripcion",
+      );
+
+      if (!paymentResult.success) {
+        throw new Error(paymentResult.error || "No se pudo registrar el pago");
+      }
+
+      console.log(
+        `✅ Pago registrado. Status: ${paymentResult.registrationStatus}`,
+      );
+
+      // 3. Setear cookie de sesión
+      await setRegistrationSession(userId);
+
+      // 4. Limpiar datos locales
       clearRegStorage();
+
+      // 5. Redirigir al dashboard
       router.push("/dashboard");
-    } else {
-      alert(result.error || "Error al completar el registro");
+    } catch (error: any) {
+      console.error("Error en completeStripeRegistration:", error);
+      alert(
+        error.message ||
+          "Error al completar el registro. Por favor intenta de nuevo.",
+      );
       setIsCompletingRegistration(false);
       // Restaurar datos para reintentar
       await restoreFromStorage();
@@ -608,9 +639,7 @@ export default function RegisterPage() {
     }
 
     if (step === 2 && !isDocumentVerified) {
-      alert(
-        "Por favor, espera a que terminemos de verificar tu edad o sube un documento válido.",
-      );
+      alert("Por favor sube tu documento antes de continuar.");
       return;
     }
 
@@ -640,7 +669,8 @@ export default function RegisterPage() {
         const fileData = new FormData();
         if (formData.fotoPerfil)
           fileData.append("fotoPerfil", formData.fotoPerfil);
-        if (formData.documento) fileData.append("documento", formData.documento);
+        if (formData.documento)
+          fileData.append("documento", formData.documento);
         fileData.append("edad", formData.edad);
 
         const uploadResult = await uploadRegistrationFiles(fileData);
@@ -676,7 +706,20 @@ export default function RegisterPage() {
       );
 
       if (result.success && result.url) {
-        window.location.href = result.url;
+        // Guardar baseAmount para usar en completeStripeRegistration
+        const existing = loadRegText() || {};
+        saveRegText({
+          ...existing,
+          baseAmount:
+            formData.tipoPago === "completo"
+              ? config.fullPaymentPrice
+              : config.registrationFeePrice,
+        });
+
+        // Usar setTimeout para dar tiempo a que se guarden los datos
+        setTimeout(() => {
+          window.location.href = result.url;
+        }, 100);
       } else {
         alert(
           result.error ||
@@ -686,14 +729,77 @@ export default function RegisterPage() {
       }
     } else {
       // Transferencia/efectivo → Registrar ahora con comprobante
-      const result = await handleSubmit(false);
-      if (result.success) {
-        clearRegStorage();
-        setStep(9);
-      } else {
-        alert(result.error || "Hubo un error al procesar tu registro");
+      try {
+        if (!formData.comprobantePago) {
+          alert("Por favor sube una foto del comprobante de pago");
+          setIsProcessing(false);
+          return;
+        }
+
+        // Subir archivos primero
+        const fileData = new FormData();
+        if (formData.fotoPerfil)
+          fileData.append("fotoPerfil", formData.fotoPerfil);
+        if (formData.documento)
+          fileData.append("documento", formData.documento);
+        fileData.append("edad", formData.edad);
+
+        const uploadResult = await uploadRegistrationFiles(fileData);
+        if (!uploadResult.success) {
+          alert("Error al subir archivos. Intenta de nuevo.");
+          setIsProcessing(false);
+          return;
+        }
+
+        // Registrar usuario
+        const data = new FormData();
+        data.append("nombre", formData.nombre);
+        data.append("apellido", formData.apellido);
+        data.append("telefono", formData.telefono);
+        data.append("password", formData.password);
+        data.append("edad", formData.edad);
+        data.append("genero", formData.genero);
+        data.append("tallaPlayera", formData.tallaPlayera);
+        data.append(
+          "pais",
+          formData.pais === "Otro" ? formData.otroPais : formData.pais,
+        );
+        data.append("estado", formData.estado);
+        data.append("localidad", formData.localidad);
+        data.append("alergias", formData.alergias);
+        data.append("padecimiento", formData.padecimiento);
+        data.append("medicamento", formData.medicamento);
+        data.append("dosisFrecuencia", formData.dosisFrecuencia);
+        if (formData.contactoEmergencia) {
+          data.append("contactoNombre", formData.contactoEmergencia.nombre);
+          data.append("contactoTelefono", formData.contactoEmergencia.telefono);
+        }
+        data.append("tipoPago", formData.tipoPago || "");
+        data.append("metodoPago", formData.metodoPago || "");
+        if (uploadResult.profileUrl)
+          data.append("profilePhotoUrl", uploadResult.profileUrl);
+        if (uploadResult.docUrl)
+          data.append("documentUrl", uploadResult.docUrl);
+        if (uploadResult.sessionId)
+          data.append("sessionId", uploadResult.sessionId);
+        if (formData.comprobantePago)
+          data.append("comprobantePago", formData.comprobantePago);
+
+        const result = await registerUser(data);
+
+        if (result.success && result.userId) {
+          clearRegStorage();
+          await setRegistrationSession(result.userId);
+          setStep(9);
+        } else {
+          alert(result.error || "Hubo un error al procesar tu registro");
+          setIsProcessing(false);
+        }
+      } catch (error: any) {
+        console.error("Error en transferencia/efectivo:", error);
+        alert("Error al procesar tu registro. Por favor intenta de nuevo.");
+        setIsProcessing(false);
       }
-      setIsProcessing(false);
     }
   };
 
@@ -754,33 +860,15 @@ export default function RegisterPage() {
     setStep((prev) => prev - 1);
   };
 
-  const handleFileChange = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-    field: "documento" | "comprobantePago" | "fotoPerfil",
-  ) => {
-    const file = e.target.files?.[0] || null;
-    if (!file) return;
-    if (field === "documento") {
-      setFormData({ ...formData, documento: file });
-      setIsDocumentVerified(false);
-      setIsAdultCompanion(false);
-      setAdultSpotsLeft(null);
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
-      const isValid = await verifyAgeFromDocument(file);
-      if (isValid) setIsDocumentVerified(true);
-    } else {
-      setFormData({ ...formData, [field]: file });
-      if (file.type.startsWith("image/")) {
-        const url = URL.createObjectURL(file);
-        if (field === "fotoPerfil") setProfilePreviewUrl(url);
-      }
-    }
-  };
-
   const handleEdadChange = (value: string) => {
     const cleanValue = value.replace(/[^0-9]/g, "").slice(0, 2);
     setFormData({ ...formData, edad: cleanValue });
+  };
+
+  const handleFotoPerfilCapturada = (file: File) => {
+    setFormData({ ...formData, fotoPerfil: file });
+    const url = URL.createObjectURL(file);
+    setProfilePreviewUrl(url);
   };
 
   const saveContacto = () => {
@@ -803,57 +891,6 @@ export default function RegisterPage() {
         newData.dosisFrecuencia = "N/A";
       }
       setFormData(newData);
-    }
-  };
-
-  const verifyAgeFromDocument = async (file: File) => {
-    setIsVerifying(true);
-    setOcrError(null);
-    setIsAdultCompanion(false);
-    setAdultSpotsLeft(null);
-    try {
-      const reader = new FileReader();
-      const base64Promise = new Promise<string>((resolve) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(file);
-      });
-      const base64Image = await base64Promise;
-      const result = await verifyDocumentAge(base64Image);
-      if (result.success) {
-        if ((result as any).isAdultCompanion) {
-          setIsAdultCompanion(true);
-          if (result.isValid) {
-            setAdultSpotsLeft((result as any).spotsLeft ?? null);
-            setIsDocumentVerified(true);
-            return true;
-          } else {
-            setOcrError(
-              "Lo sentimos, el cupo de adultos acompañantes (50 lugares) está lleno.",
-            );
-            setIsDocumentVerified(false);
-            return false;
-          }
-        }
-        if (!result.isValid) {
-          const errorMsg = `Lo sentimos, detectamos una edad de ${result.age} años. La edad mínima es de 15 años.`;
-          setOcrError(errorMsg);
-          setIsDocumentVerified(false);
-          return false;
-        }
-        setIsDocumentVerified(true);
-        return true;
-      } else {
-        setOcrError(result.error || "No se pudo leer el documento");
-        setIsDocumentVerified(false);
-        return false;
-      }
-    } catch (error) {
-      console.error("Error en validación OCR:", error);
-      setOcrError("No se pudo leer el documento. Por favor intenta de nuevo.");
-      setIsDocumentVerified(false);
-      return false;
-    } finally {
-      setIsVerifying(false);
     }
   };
 
@@ -1038,92 +1075,88 @@ export default function RegisterPage() {
                 exit={{ opacity: 0, scale: 0.98 }}
                 className="space-y-6 bg-white p-5 sm:p-8 rounded-[2rem] shadow-xl border border-gray-100"
               >
-                                    <div className="space-y-4">
-                                      <div className="flex items-center gap-3 mb-2">
-                                        <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                                          <FileText size={20} />
-                                        </div>
-                                        <div>
-                                          <h2 className="text-lg font-bold text-secondary uppercase tracking-tight leading-none">
-                                            {needsResponsiva ? "Responsiva" : "Identificación"}
-                                          </h2>
-                                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-1">
-                                            {needsResponsiva
-                                              ? "Menores de 18"
-                                              : "INE, ID, Pasaporte o Documento Oficial"}
-                                          </p>
-                                        </div>
-                                      </div>
-                
-                                      {/* Carta Responsiva para menores */}
-                                      {needsResponsiva ? (
-                                        <CartaResponsivaTabs
-                                          templateUrl={cartaTemplateUrl}
-                                          templateLoading={cartaTemplateLoading}
-                                          onDownloadTemplate={handleDownloadCartaTemplate}
-                                          onFileSelect={(file) => {
-                                            setFormData({ ...formData, documento: file });
-                                            const url = URL.createObjectURL(file);
-                                            setPreviewUrl(url);
-                                            // Auto-verify para responsiva
-                                            setIsDocumentVerified(true);
-                                          }}
-                                          previewUrl={previewUrl}
-                                          fileName={formData.documento?.name}
-                                          onRemove={() => {
-                                            setFormData({ ...formData, documento: null });
-                                            setPreviewUrl(null);
-                                            setIsDocumentVerified(false);
-                                          }}
-                                          isLoading={isVerifying}
-                                        />
-                                      ) : (
-                                        /* PhotoUploadTabs para adultos (Identificación - SOLO CÁMARA) */
-                                        <div className="space-y-4">
-                                          <PhotoUploadTabs
-                                            cameraOnly={true}
-                                            onFileSelect={async (file) => {
-                                              setFormData({ ...formData, documento: file });
-                                              const url = URL.createObjectURL(file);
-                                              setPreviewUrl(url);
-                                              // Validación automática al capturar
-                                              await verifyAgeFromDocument(file);
-                                            }}
-                                            previewUrl={previewUrl}
-                                            fileName={formData.documento?.name}
-                                            onRemove={() => {
-                                              setFormData({ ...formData, documento: null });
-                                              setPreviewUrl(null);
-                                              setIsDocumentVerified(false);
-                                              setIsAdultCompanion(false);
-                                              setAdultSpotsLeft(null);
-                                            }}
-                                                                        width="w-full"
-                                                                        height="h-64"
-                                                                                                    isLoading={isVerifying}
-                                                                                                    isVerified={isDocumentVerified}
-                                                                                                    verificationMessage={isAdultCompanion ? "Adulto Acompañante" : "Edad Verificada"}
-                                                                                                    errorMessage={ocrError}
-                                                                                                    subMessage={isAdultCompanion && adultSpotsLeft !== null ? `${adultSpotsLeft} lugares disponibles` : null}
-                                                                                                    description="Captura tu INE, ID, Pasaporte o Documento Oficial"
-                                                                                                  />                                                                                                </div>
-                                                                                              )}
-                                                                                            </div>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                      <FileText size={20} />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-secondary uppercase tracking-tight leading-none">
+                        {needsResponsiva ? "Responsiva" : "Identificación"}
+                      </h2>
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-1">
+                        {needsResponsiva
+                          ? "Menores de 18"
+                          : "INE, ID, Pasaporte o Documento Oficial"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Carta Responsiva para menores */}
+                  {needsResponsiva ? (
+                    <CartaResponsivaTabs
+                      templateUrl={cartaTemplateUrl}
+                      templateLoading={cartaTemplateLoading}
+                      onDownloadTemplate={handleDownloadCartaTemplate}
+                      onFileSelect={(file) => {
+                        setFormData({ ...formData, documento: file });
+                        const url = URL.createObjectURL(file);
+                        setPreviewUrl(url);
+                        // Auto-verify para responsiva
+                        setIsDocumentVerified(true);
+                      }}
+                      previewUrl={previewUrl}
+                      fileName={formData.documento?.name}
+                      onRemove={() => {
+                        setFormData({ ...formData, documento: null });
+                        setPreviewUrl(null);
+                        setIsDocumentVerified(false);
+                      }}
+                      isLoading={false}
+                    />
+                  ) : (
+                    /* PhotoUploadTabs para adultos (Identificación - SOLO CÁMARA) */
+                    <div className="space-y-4">
+                      <PhotoUploadTabs
+                        cameraOnly={true}
+                        onFileSelect={(file) => {
+                          setFormData({ ...formData, documento: file });
+                          const url = URL.createObjectURL(file);
+                          setPreviewUrl(url);
+                          setIsDocumentVerified(true);
+                        }}
+                        previewUrl={previewUrl}
+                        fileName={formData.documento?.name}
+                        onRemove={() => {
+                          setFormData({ ...formData, documento: null });
+                          setPreviewUrl(null);
+                          setIsDocumentVerified(false);
+                        }}
+                        width="w-full"
+                        height="h-64"
+                        isLoading={false}
+                        isVerified={isDocumentVerified}
+                        verificationMessage="Documento Capturado"
+                        errorMessage={null}
+                        subMessage={null}
+                        description="Captura tu INE, ID, Pasaporte o Documento Oficial"
+                      />{" "}
+                    </div>
+                  )}
+                </div>
 
                 <div className="flex gap-3">
                   <Button
                     variant="outline"
                     className="flex-1 h-14"
                     onClick={handleBack}
-                    disabled={isVerifying}
+                    disabled={false}
                   >
                     Atrás
                   </Button>
                   <Button
                     className="flex-[2] h-14 font-bold shadow-lg"
-                    disabled={
-                      !isStep2Valid || isVerifying || !isDocumentVerified
-                    }
+                    disabled={!isStep2Valid || !isDocumentVerified}
                     onClick={handleNext}
                   >
                     Siguiente
@@ -1167,10 +1200,12 @@ export default function RegisterPage() {
                   onChange={(val) => {
                     if (val === "Otro") {
                       setShowManualEstado(true);
-                      setFormData({ ...formData, estado: "" });
+                      setFormData({ ...formData, estado: "", localidad: "" });
+                      setShowManualLocalidad(false);
                     } else {
                       setShowManualEstado(false);
-                      setFormData({ ...formData, estado: val });
+                      setFormData({ ...formData, estado: val, localidad: "" });
+                      setShowManualLocalidad(false);
                     }
                   }}
                 />
@@ -1193,6 +1228,7 @@ export default function RegisterPage() {
                   label="Localidad / Sede"
                   placeholder="Busca tu ciudad o sede..."
                   options={filteredLocalities}
+                  disabled={!formData.estado}
                   value={showManualLocalidad ? "Otro" : formData.localidad}
                   onChange={(val) => {
                     if (val === "Otro") {
@@ -1757,24 +1793,26 @@ export default function RegisterPage() {
                         </span>
                       </p>
                     </div>
-                    <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-200 rounded-3xl cursor-pointer hover:bg-gray-50 transition-all">
-                      <Camera className="h-8 w-8 text-primary mb-2" />
-                      <span className="text-[10px] font-bold text-gray-400 uppercase text-center px-4 leading-tight">
-                        {formData.comprobantePago
-                          ? formData.comprobantePago.name
-                          : "Subir Comprobante SPEI"}
-                      </span>
-                      <input
-                        type="file"
-                        className="hidden"
-                        accept="image/*,application/pdf"
-                        onChange={(e) => handleFileChange(e, "comprobantePago")}
-                      />
-                    </label>
+                    <PaymentProofCapture
+                      onFileSelect={(file) => {
+                        setFormData({ ...formData, comprobantePago: file });
+                        const url = URL.createObjectURL(file);
+                        setPreviewUrl(url);
+                      }}
+                      onRemove={() => {
+                        setFormData({ ...formData, comprobantePago: null });
+                        setPreviewUrl(null);
+                      }}
+                      previewUrl={previewUrl}
+                      fileName={formData.comprobantePago?.name}
+                      label="Capturar Comprobante SPEI"
+                      description="Toma una foto clara del comprobante de tu transferencia bancaria"
+                      isLoading={isProcessing}
+                    />
                   </div>
                 )}
                 {formData.metodoPago === "efectivo" && (
-                  <div className="space-y-4 text-center">
+                  <div className="space-y-4">
                     <div className="p-6 bg-amber-50 border border-amber-100 rounded-[2rem] space-y-4 text-amber-800">
                       <p className="text-[10px] font-black uppercase tracking-widest">
                         Depósito en OXXO
@@ -1792,20 +1830,22 @@ export default function RegisterPage() {
                         para realizar tu depósito.
                       </p>
                     </div>
-                    <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-200 rounded-[2rem] cursor-pointer hover:bg-gray-50 transition-all">
-                      <Camera className="h-8 w-8 text-primary mb-2" />
-                      <span className="text-[10px] font-bold text-gray-400 uppercase text-center px-4 leading-tight">
-                        {formData.comprobantePago
-                          ? formData.comprobantePago.name
-                          : "Subir Ticket OXXO"}
-                      </span>
-                      <input
-                        type="file"
-                        className="hidden"
-                        accept="image/*,application/pdf"
-                        onChange={(e) => handleFileChange(e, "comprobantePago")}
-                      />
-                    </label>
+                    <PaymentProofCapture
+                      onFileSelect={(file) => {
+                        setFormData({ ...formData, comprobantePago: file });
+                        const url = URL.createObjectURL(file);
+                        setPreviewUrl(url);
+                      }}
+                      onRemove={() => {
+                        setFormData({ ...formData, comprobantePago: null });
+                        setPreviewUrl(null);
+                      }}
+                      previewUrl={previewUrl}
+                      fileName={formData.comprobantePago?.name}
+                      label="Capturar Ticket OXXO"
+                      description="Toma una foto clara del ticket de depósito de OXXO"
+                      isLoading={isProcessing}
+                    />
                   </div>
                 )}
                 <div className="flex flex-col gap-3 pt-2">

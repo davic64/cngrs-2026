@@ -147,18 +147,22 @@ export function ChatWidget({ userName }: ChatWidgetProps) {
     setInput("");
     setIsSending(true);
 
-    const msg = await sendSupportMessage(chatId, text, "visitor");
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: msg.id,
-        sender: msg.sender,
-        message: msg.message,
-        createdAt: msg.createdAt,
-      },
-    ]);
-    lastMessageIdRef.current = msg.id;
-    setIsSending(false);
+    try {
+      const msg = await sendSupportMessage(chatId, text, "visitor");
+      // Update the last message ID BEFORE adding to state to prevent polling duplication
+      lastMessageIdRef.current = msg.id;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: msg.id,
+          sender: msg.sender,
+          message: msg.message,
+          createdAt: msg.createdAt,
+        },
+      ]);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

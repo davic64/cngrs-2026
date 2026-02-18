@@ -17,6 +17,7 @@ interface SearchableSelectProps {
   onChange: (value: string) => void;
   placeholder?: string;
   error?: string;
+  disabled?: boolean;
 }
 
 export function SearchableSelect({
@@ -26,10 +27,12 @@ export function SearchableSelect({
   onChange,
   placeholder = "Buscar...",
   error,
+  disabled = false,
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
 
   const filteredOptions = options.filter((opt) =>
     opt.label.toLowerCase().includes(search.toLowerCase()),
@@ -50,6 +53,14 @@ export function SearchableSelect({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  React.useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => searchInputRef.current?.focus(), 50);
+    } else {
+      setSearch("");
+    }
+  }, [isOpen]);
+
   return (
     <div className="w-full space-y-1.5" ref={containerRef}>
       {label && (
@@ -61,11 +72,13 @@ export function SearchableSelect({
       <div className="relative">
         <button
           type="button"
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => !disabled && setIsOpen(!isOpen)}
+          disabled={disabled}
           className={cn(
             "flex h-10 w-full items-center justify-between rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all",
             error && "border-red-500",
             isOpen && "ring-2 ring-primary/20 border-primary",
+            disabled && "opacity-50 cursor-not-allowed bg-gray-50",
           )}
         >
           <span className={cn("truncate", !value && "text-gray-400")}>
@@ -90,6 +103,7 @@ export function SearchableSelect({
               <div className="p-2 border-b border-gray-50 flex items-center gap-2">
                 <Search className="h-4 w-4 text-gray-400 ml-2" />
                 <input
+                  ref={searchInputRef}
                   className="w-full bg-transparent py-2 text-sm outline-none placeholder:text-gray-400"
                   placeholder="Escribe para filtrar..."
                   value={search}

@@ -46,6 +46,17 @@ export async function deleteLocality(id: number) {
   revalidatePath("/auth/register");
 }
 
+export async function updateLocality(
+  id: number,
+  data: { name: string; state: string; country: string },
+) {
+  await db.update(localities).set(data).where(eq(localities.id, id));
+  revalidatePath("/admin/dashboard");
+  revalidatePath("/admin/localities");
+  revalidatePath("/auth/register");
+  return { success: true };
+}
+
 // --- GESTIÓN DE CONFIGURACIÓN ---
 export async function getSettings() {
   try {
@@ -122,6 +133,7 @@ export async function getUsers() {
     with: {
       emergencyContact: true,
       healthInfo: true,
+      payments: true,
     },
     orderBy: [desc(users.createdAt)],
   });
@@ -306,6 +318,7 @@ export async function getPendingPayments() {
 export async function validatePayment(
   paymentId: number,
   status: "completado" | "rechazado",
+  rejectionReason?: string,
 ) {
   try {
     const [updatedPayment] = await db
@@ -314,7 +327,53 @@ export async function validatePayment(
       .where(eq(payments.id, paymentId))
       .returning();
 
-    if (status === "completado") {
+    if (status === "rechazado") {
+      // 1. Actualizar con razón de rechazo
+      if (rejectionReason) {
+        await db
+          .update(payments)
+          .set({ rejectionReason })
+          .where(eq(payments.id, paymentId));
+      }
+
+      // 2. Eliminar el comprobante de R2 si existe
+      if (updatedPayment.proofUrl) {
+        try {
+          await deleteFile(updatedPayment.proofUrl);
+        } catch (error) {
+          console.error("Error al eliminar comprobante:", error);
+          // No fallar si no se puede eliminar el archivo
+        }
+      }
+
+      // 3. Recalcular el estatus de registro del usuario
+      const userPayments = await db
+        .select({ amount: payments.amount })
+        .from(payments)
+        .where(
+          and(
+            eq(payments.userId, updatedPayment.userId),
+            eq(payments.status, "completado"),
+          ),
+        );
+
+      const totalPaid = userPayments.reduce((acc, p) => acc + p.amount, 0);
+      const config = await db.query.settings.findFirst();
+      const requiredAmount = config?.fullPaymentPrice || 1500;
+
+      // Si después del rechazo no tiene suficientes pagos, volver a "pendiente"
+      if (totalPaid === 0) {
+        await db
+          .update(users)
+          .set({ registrationStatus: "pendiente" })
+          .where(eq(users.id, updatedPayment.userId));
+      } else if (totalPaid < requiredAmount) {
+        await db
+          .update(users)
+          .set({ registrationStatus: "parcial" })
+          .where(eq(users.id, updatedPayment.userId));
+      }
+    } else if (status === "completado") {
       // 1. Obtener todos los pagos completados del usuario
       const userPayments = await db
         .select({ amount: payments.amount })
@@ -434,7 +493,8 @@ export async function uploadCartaResponsivaTemplate(formData: FormData) {
 
     // Subir a ruta fija (sobreescribe si ya existe)
     const uploaded = await uploadCartaResponsivaToR2(file);
-    if (!uploaded.success) return { success: false, error: "Error al subir la plantilla" };
+    if (!uploaded.success)
+      return { success: false, error: "Error al subir la plantilla" };
 
     revalidatePath("/admin/dashboard");
     revalidatePath("/auth/register");
@@ -470,5 +530,137 @@ export async function deleteCartaResponsivaTemplate() {
   } catch (error) {
     console.error("Error deleting carta responsiva template:", error);
     return { success: false, error: "Error al eliminar la plantilla" };
+  }
+}
+
+// --- GESTIÓN DE INFORMACIÓN DE SOPORTE ---
+export async function getSupportInfo() {
+  try {
+    const config = await db.query.settings.findFirst();
+    if (!config) {
+      return {
+        supportPhone: "+52 (555) 123-4567",
+        supportEmail: "soporte@cngrs.mx",
+        supportHours: "Lunes a Viernes, 9:00 AM - 6:00 PM",
+      };
+    }
+    return {
+      supportPhone: config.supportPhone || "+52 (555) 123-4567",
+      supportEmail: config.supportEmail || "soporte@cngrs.mx",
+      supportHours: config.supportHours || "Lunes a Viernes, 9:00 AM - 6:00 PM",
+    };
+  } catch (error) {
+    console.error("Error getting support info:", error);
+    return {
+      supportPhone: "+52 (555) 123-4567",
+      supportEmail: "soporte@cngrs.mx",
+      supportHours: "Lunes a Viernes, 9:00 AM - 6:00 PM",
+    };
+  }
+}
+
+export async function updateSupportInfo(data: {
+  supportPhone?: string;
+  supportEmail?: string;
+  supportHours?: string;
+}) {
+  try {
+    await db.update(settings).set({ ...data, updatedAt: new Date() });
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/auth/login");
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating support info:", error);
+    return {
+      success: false,
+      error: "Error al actualizar información de soporte",
+    };
+  }
+}
+
+// --- PASSWORD RESET MANAGEMENT ---
+export async function generateTemporaryPassword(userId: string) {
+  try {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+    });
+
+    if (!user) {
+      return { success: false, error: "Usuario no encontrado" };
+    }
+
+    // Generate a random temporary password (12 characters, mix of letters and numbers)
+    const tempPassword =
+      Math.random().toString(36).slice(2, 10).toUpperCase() +
+      Math.random().toString(36).slice(2, 6).toUpperCase();
+
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+    // Update user password and mark that they need to change it
+    await db
+      .update(users)
+      .set({
+        password: hashedPassword,
+        passwordResetRequired: true,
+      })
+      .where(eq(users.id, userId));
+
+    revalidatePath("/admin/users");
+    revalidatePath("/dashboard");
+
+    return {
+      success: true,
+      tempPassword: tempPassword,
+      message: `Contraseña temporal generada: ${tempPassword}. El usuario deberá cambiarla en su próximo login.`,
+    };
+  } catch (error) {
+    console.error("Error generating temporary password:", error);
+    return {
+      success: false,
+      error: "Error al generar contraseña temporal",
+    };
+  }
+}
+
+export async function resetUserPassword(userId: string) {
+  try {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+    });
+
+    if (!user) {
+      return { success: false, error: "Usuario no encontrado" };
+    }
+
+    // Generate temporary password
+    const tempPassword =
+      Math.random().toString(36).slice(2, 10).toUpperCase() +
+      Math.random().toString(36).slice(2, 6).toUpperCase();
+
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+    // Update user password
+    await db
+      .update(users)
+      .set({
+        password: hashedPassword,
+        passwordResetRequired: true,
+      })
+      .where(eq(users.id, userId));
+
+    revalidatePath("/admin/users");
+    revalidatePath("/dashboard");
+
+    return {
+      success: true,
+      tempPassword: tempPassword,
+      message: `Contraseña temporal enviada al usuario. Nueva contraseña: ${tempPassword}`,
+    };
+  } catch (error) {
+    console.error("Error resetting user password:", error);
+    return {
+      success: false,
+      error: "Error al resetear contraseña del usuario",
+    };
   }
 }
