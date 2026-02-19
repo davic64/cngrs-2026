@@ -198,9 +198,12 @@ export function LoginClient() {
         </div>
 
         {/* Footer info */}
-        <div className="text-center mt-10">
+        <div className="text-center mt-10 space-y-1">
           <p className="text-[10px] font-bold tracking-[0.4em] text-secondary/30 uppercase">
             Yo Soy • JIDI • CNGRS26
+          </p>
+          <p className="text-[10px] font-semibold text-secondary/40 tracking-wider">
+            Desarrollado por <span className="text-primary/60 font-bold">LDV & Tribu JIDI</span>
           </p>
         </div>
       </motion.div>

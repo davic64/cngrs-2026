@@ -10,7 +10,6 @@ import {
   Clock,
   FileText,
   MapPin,
-  Plus,
   Save,
   Trash2,
   TrendingUp,
@@ -20,12 +19,9 @@ import {
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import {
-  createAdmin,
   createLocality,
-  deleteAdmin,
   deleteLocality,
   deleteCartaResponsivaTemplate,
-  updateAdmin,
   updateSettings,
   uploadCartaResponsivaTemplate,
   updateVenue,
@@ -42,7 +38,6 @@ interface AdminDashboardClientProps {
   stats: any;
   pendingPayments: any[];
   config: any;
-  admins: any[];
   cartaResponsivaUrl: string | null;
 }
 
@@ -50,32 +45,10 @@ export function AdminDashboardClient({
   stats,
   pendingPayments,
   config,
-  admins,
   cartaResponsivaUrl,
 }: AdminDashboardClientProps) {
   const router = useRouter();
 
-  // Admin State
-  const [newAdmin, setNewAdmin] = React.useState({
-    firstName: "",
-    lastName: "",
-    phone: "",
-    password: "",
-  });
-  const [isAddingAdmin, setIsAddingAdmin] = React.useState(false);
-
-  const handleAddAdmin = async () => {
-    if (!newAdmin.phone || !newAdmin.password) return;
-    setIsAddingAdmin(true);
-    const result = await createAdmin(newAdmin);
-    if (result.success) {
-      setNewAdmin({ firstName: "", lastName: "", phone: "", password: "" });
-      router.refresh();
-    } else {
-      alert(result.error || "No se pudo crear el administrador");
-    }
-    setIsAddingAdmin(false);
-  };
   const [prices, setPrices] = React.useState({
     fullPaymentPrice: config.fullPaymentPrice,
     registrationFeePrice: config.registrationFeePrice,
@@ -256,75 +229,6 @@ export function AdminDashboardClient({
                   Sin pendientes por ahora
                 </p>
               )}
-            </div>
-          </DashboardCard>
-
-          {/* Gestión de Administradores */}
-          <DashboardCard title="Administradores del Sistema">
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <Input
-                  placeholder="Nombre"
-                  value={newAdmin.firstName}
-                  onChange={(e) =>
-                    setNewAdmin({ ...newAdmin, firstName: e.target.value })
-                  }
-                />
-                <Input
-                  placeholder="Teléfono"
-                  value={newAdmin.phone}
-                  onChange={(e) =>
-                    setNewAdmin({ ...newAdmin, phone: e.target.value })
-                  }
-                />
-                <Input
-                  placeholder="Contraseña"
-                  type="password"
-                  value={newAdmin.password}
-                  onChange={(e) =>
-                    setNewAdmin({ ...newAdmin, password: e.target.value })
-                  }
-                />
-                <Button
-                  onClick={handleAddAdmin}
-                  disabled={isAddingAdmin}
-                  className="h-11 shadow-lg shadow-primary/20 font-black uppercase text-[10px] tracking-widest"
-                >
-                  <Plus size={16} className="mr-2" />
-                  Agregar
-                </Button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {admins.map((adm) => (
-                  <div
-                    key={adm.id}
-                    className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 bg-secondary text-white rounded-xl flex items-center justify-center font-black text-xs">
-                        {adm.firstName[0]}
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-black text-secondary uppercase">
-                          {adm.firstName} {adm.lastName}
-                        </p>
-                        <p className="text-[10px] font-bold text-primary">
-                          {adm.phone}
-                        </p>
-                      </div>
-                    </div>
-                    {adm.phone !== "3318319769" && (
-                      <button
-                        onClick={() => deleteAdmin(adm.id)}
-                        className="text-gray-300 hover:text-red-500 transition-colors p-2"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
             </div>
           </DashboardCard>
 

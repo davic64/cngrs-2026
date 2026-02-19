@@ -1,12 +1,10 @@
 import { redirect } from "next/navigation";
 import {
-  getAdmins,
   getAdminStats,
   getCartaResponsivaTemplate,
   getLocalities,
   getPendingPayments,
   getSettings,
-  getVenue,
 } from "@/app/actions/admin";
 import { getSessionUser } from "@/app/actions/auth";
 import { AdminDashboardClient } from "@/components/admin/AdminDashboardClient";
@@ -29,14 +27,12 @@ export default async function AdminDashboardPage() {
     pendingPayments,
     config,
     allLocalities,
-    admins,
     cartaResponsiva,
   ] = await Promise.all([
     getAdminStats(),
     getPendingPayments(),
     getSettings(),
     getLocalities(),
-    getAdmins(),
     getCartaResponsivaTemplate(),
   ]);
 
@@ -45,7 +41,6 @@ export default async function AdminDashboardPage() {
       stats={stats}
       pendingPayments={pendingPayments}
       config={config}
-      admins={admins}
       cartaResponsivaUrl={
         cartaResponsiva.success ? (cartaResponsiva.templateUrl ?? null) : null
       }

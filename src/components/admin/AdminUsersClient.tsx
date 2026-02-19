@@ -534,43 +534,43 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
                   )}
                 </div>
 
-                {selectedUser.age < 18 && (
-                  <label
-                    className={cn(
-                      "w-full flex items-center justify-center gap-4 h-20 bg-white border-2 border-dashed rounded-[2rem] cursor-pointer hover:bg-primary/5 transition-all group",
-                      isUploading
-                        ? "border-primary animate-pulse"
-                        : "border-gray-200 hover:border-primary/30",
-                    )}
-                  >
-                    {isUploading ? (
-                      <span className="text-[10px] font-black text-primary uppercase tracking-widest">
-                        Subiendo Archivo...
-                      </span>
-                    ) : (
-                      <>
-                        <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-                          <Upload size={20} />
-                        </div>
-                        <div className="text-left">
-                          <p className="text-[10px] font-black text-secondary uppercase tracking-widest">
-                            Cargar Responsiva
-                          </p>
-                          <p className="text-[8px] font-bold text-gray-400 uppercase mt-0.5">
-                            Formatos JPG, PNG o PDF
-                          </p>
-                        </div>
-                      </>
-                    )}
-                    <input
-                      type="file"
-                      className="hidden"
-                      accept="image/*,application/pdf"
-                      onChange={handleUploadResponsiva}
-                      disabled={isUploading}
-                    />
-                  </label>
-                )}
+                <label
+                  className={cn(
+                    "w-full flex items-center justify-center gap-4 h-20 bg-white border-2 border-dashed rounded-[2rem] cursor-pointer hover:bg-primary/5 transition-all group",
+                    isUploading
+                      ? "border-primary animate-pulse"
+                      : "border-gray-200 hover:border-primary/30",
+                  )}
+                >
+                  {isUploading ? (
+                    <span className="text-[10px] font-black text-primary uppercase tracking-widest">
+                      Subiendo Archivo...
+                    </span>
+                  ) : (
+                    <>
+                      <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+                        <Upload size={20} />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-[10px] font-black text-secondary uppercase tracking-widest">
+                          {selectedUser.age < 18
+                            ? "Cargar Responsiva"
+                            : "Cargar Identificación"}
+                        </p>
+                        <p className="text-[8px] font-bold text-gray-400 uppercase mt-0.5">
+                          Formatos JPG, PNG o PDF
+                        </p>
+                      </div>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*,application/pdf"
+                    onChange={handleUploadResponsiva}
+                    disabled={isUploading}
+                  />
+                </label>
               </div>
             </div>
           </div>

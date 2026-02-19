@@ -58,12 +58,9 @@ export function PhotoUploadTabs({
     const file = e.target.files?.[0];
     if (file) {
       // Validar que sea una imagen (incluyendo HEIC/HEIF de iOS)
-      const isImage =
-        file.type.startsWith("image/") ||
-        file.name.toLowerCase().endsWith(".heic") ||
-        file.name.toLowerCase().endsWith(".heif");
+      const isImage = file.type.startsWith("image/");
       if (!isImage) {
-        alert("Solo se permiten archivos de imagen (JPG, PNG, WebP, HEIC)");
+        alert("Solo se permiten archivos de imagen (JPG, PNG, WebP)");
         return;
       }
       onFileSelect(file);

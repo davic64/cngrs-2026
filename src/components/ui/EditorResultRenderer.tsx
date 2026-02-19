@@ -64,13 +64,18 @@ export function EditorResultRenderer({
                   block.data.style === "ordered" ? "list-decimal" : "list-disc",
                 )}
               >
-                {block.data.items.map((item: string, i: number) => (
-                  <li
-                    key={i}
-                    className="pl-1"
-                    dangerouslySetInnerHTML={{ __html: item }}
-                  />
-                ))}
+                {block.data.items.map((item: any, i: number) => {
+                  // Editor.js list v2 stores items as objects {content, meta, items}
+                  // v1 stored them as plain strings
+                  const html = typeof item === "string" ? item : (item?.content ?? "");
+                  return (
+                    <li
+                      key={i}
+                      className="pl-1"
+                      dangerouslySetInnerHTML={{ __html: html }}
+                    />
+                  );
+                })}
               </ListTag>
             );
           }

@@ -51,7 +51,7 @@ export async function uploadTemporaryFile(
       fileType === "fotoPerfil"
         ? "Perfil"
         : fileType === "documento"
-          ? "Identificación"
+          ? "Identificacion"
           : "Pagos";
     const url = await uploadFile(file, folder);
 

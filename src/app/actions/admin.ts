@@ -197,10 +197,12 @@ export async function createAdmin(data: any) {
   try {
     const hashedPassword = await bcrypt.hash(data.password, 10);
     await db.insert(users).values({
-      ...data,
+      firstName: data.firstName,
+      lastName: "",
+      phone: data.phone,
       password: hashedPassword,
       role: "admin",
-      age: 26,
+      age: 0,
       gender: "M",
       shirtSize: "N/A",
       country: "N/A",

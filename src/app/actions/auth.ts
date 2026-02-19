@@ -113,7 +113,7 @@ export async function registerUser(formData: FormData) {
       const document = formData.get("documento") as File;
       if (document && document.size > 0) {
         const folderName =
-          age >= 15 && age <= 17 ? "Carta Responsiva" : "Identificación";
+          age >= 15 && age <= 17 ? "Carta Responsiva" : "Identificacion";
         docUrl = await uploadFile(document, folderName);
       }
     }

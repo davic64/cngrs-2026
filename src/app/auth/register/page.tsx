@@ -61,7 +61,7 @@ function saveRegText(data: Record<string, unknown>) {
   try {
     localStorage.setItem(REG_KEY, JSON.stringify(data));
     localStorage.setItem(REG_EXPIRY_KEY, String(Date.now() + TTL_24H));
-  } catch {}
+  } catch { }
 }
 
 function loadRegText(): Record<string, any> | null {
@@ -82,7 +82,7 @@ function clearRegStorage() {
   try {
     localStorage.removeItem(REG_KEY);
     localStorage.removeItem(REG_EXPIRY_KEY);
-  } catch {}
+  } catch { }
 }
 
 const _LOCALIDADES = [
@@ -319,6 +319,9 @@ export default function RegisterPage() {
   const [showManualEstado, setShowManualEstado] = React.useState(false);
   const [showManualLocalidad, setShowManualLocalidad] = React.useState(false);
   const [isDocumentVerified, setIsDocumentVerified] = React.useState(false);
+  const [isIdValidating, setIsIdValidating] = React.useState(false);
+  const [comprobantePreviewUrl, setComprobantePreviewUrl] = React.useState<string | null>(null);
+  const [configLoaded, setConfigLoaded] = React.useState(false);
   const [isCompletingRegistration, setIsCompletingRegistration] =
     React.useState(false);
   const [cartaTemplateUrl, setCartaTemplateUrl] = React.useState<string | null>(
@@ -355,6 +358,7 @@ export default function RegisterPage() {
           ...settingsData,
           termsAndConditions: settingsData.termsAndConditions || "",
         } as any);
+      setConfigLoaded(true);
       if (localitiesData) setDbLocalities(localitiesData);
       if (cartaTemplateData?.success && cartaTemplateData?.templateUrl) {
         setCartaTemplateUrl(cartaTemplateData.templateUrl);
@@ -622,7 +626,7 @@ export default function RegisterPage() {
       console.error("Error en completeStripeRegistration:", error);
       alert(
         error.message ||
-          "Error al completar el registro. Por favor intenta de nuevo.",
+        "Error al completar el registro. Por favor intenta de nuevo.",
       );
       setIsCompletingRegistration(false);
       // Restaurar datos para reintentar
@@ -723,7 +727,7 @@ export default function RegisterPage() {
       } else {
         alert(
           result.error ||
-            "No se pudo conectar con la pasarela de pagos. Intenta más tarde.",
+          "No se pudo conectar con la pasarela de pagos. Intenta más tarde.",
         );
         setIsProcessing(false);
       }
@@ -736,19 +740,36 @@ export default function RegisterPage() {
           return;
         }
 
-        // Subir archivos primero
-        const fileData = new FormData();
-        if (formData.fotoPerfil)
-          fileData.append("fotoPerfil", formData.fotoPerfil);
-        if (formData.documento)
-          fileData.append("documento", formData.documento);
-        fileData.append("edad", formData.edad);
+        // Subir archivos primero O usar los ya guardados
+        let profileUrl = "";
+        let docUrl = "";
+        let sessionId = "";
+        const saved = loadRegText();
 
-        const uploadResult = await uploadRegistrationFiles(fileData);
-        if (!uploadResult.success) {
-          alert("Error al subir archivos. Intenta de nuevo.");
-          setIsProcessing(false);
-          return;
+        // 1. Prioridad: Usar URLs ya guardadas (evita duplicar subida si saveFormAndFiles ya corrió)
+        if (saved?.profilePhotoUrl && saved?.sessionId) {
+          profileUrl = saved.profilePhotoUrl;
+          docUrl = saved.documentUrl || "";
+          sessionId = saved.sessionId;
+        }
+        // 2. Si no hay guardados (o es un flujo atípico), intentar subir desde formData
+        else if (formData.fotoPerfil || formData.documento) {
+          const fileData = new FormData();
+          if (formData.fotoPerfil)
+            fileData.append("fotoPerfil", formData.fotoPerfil);
+          if (formData.documento)
+            fileData.append("documento", formData.documento);
+          fileData.append("edad", formData.edad);
+
+          const uploadResult = await uploadRegistrationFiles(fileData);
+          if (!uploadResult.success) {
+            alert("Error al subir archivos. Intenta de nuevo.");
+            setIsProcessing(false);
+            return;
+          }
+          profileUrl = uploadResult.profileUrl || "";
+          docUrl = uploadResult.docUrl || "";
+          sessionId = uploadResult.sessionId || "";
         }
 
         // Registrar usuario
@@ -776,12 +797,11 @@ export default function RegisterPage() {
         }
         data.append("tipoPago", formData.tipoPago || "");
         data.append("metodoPago", formData.metodoPago || "");
-        if (uploadResult.profileUrl)
-          data.append("profilePhotoUrl", uploadResult.profileUrl);
-        if (uploadResult.docUrl)
-          data.append("documentUrl", uploadResult.docUrl);
-        if (uploadResult.sessionId)
-          data.append("sessionId", uploadResult.sessionId);
+
+        if (profileUrl) data.append("profilePhotoUrl", profileUrl);
+        if (docUrl) data.append("documentUrl", docUrl);
+        if (sessionId) data.append("sessionId", sessionId);
+
         if (formData.comprobantePago)
           data.append("comprobantePago", formData.comprobantePago);
 
@@ -952,6 +972,9 @@ export default function RegisterPage() {
           <h1 className="text-2xl sm:text-3xl font-black text-secondary uppercase tracking-tighter">
             Registro <span className="text-primary">CNGRS26</span>
           </h1>
+          <p className="text-[10px] font-semibold text-secondary/40 tracking-wider mt-1">
+            Desarrollado por <span className="text-primary/60 font-bold">LDV & Tribu JIDI</span>
+          </p>
         </div>
 
         <div className="flex-1 overflow-y-auto no-scrollbar px-3 pb-12 -mx-3">
@@ -1123,7 +1146,12 @@ export default function RegisterPage() {
                           setFormData({ ...formData, documento: file });
                           const url = URL.createObjectURL(file);
                           setPreviewUrl(url);
-                          setIsDocumentVerified(true);
+                          setIsIdValidating(true);
+                          setIsDocumentVerified(false);
+                          setTimeout(() => {
+                            setIsIdValidating(false);
+                            setIsDocumentVerified(true);
+                          }, 2000);
                         }}
                         previewUrl={previewUrl}
                         fileName={formData.documento?.name}
@@ -1131,12 +1159,13 @@ export default function RegisterPage() {
                           setFormData({ ...formData, documento: null });
                           setPreviewUrl(null);
                           setIsDocumentVerified(false);
+                          setIsIdValidating(false);
                         }}
                         width="w-full"
                         height="h-64"
-                        isLoading={false}
+                        isLoading={isIdValidating}
                         isVerified={isDocumentVerified}
-                        verificationMessage="Documento Capturado"
+                        verificationMessage="Identificación Validada"
                         errorMessage={null}
                         subMessage={null}
                         description="Captura tu INE, ID, Pasaporte o Documento Oficial"
@@ -1461,10 +1490,17 @@ export default function RegisterPage() {
                 />
                 <div className="bg-gray-50/50 p-6 rounded-[2rem] h-80 overflow-y-auto border border-gray-100 italic custom-scrollbar shadow-inner">
                   <EditorResultRenderer data={config.termsAndConditions} />
-                  {!config.termsAndConditions && (
+                  {!configLoaded && (
                     <div className="h-full flex items-center justify-center">
                       <p className="text-[10px] text-gray-400 uppercase font-black animate-pulse">
                         Cargando términos y condiciones...
+                      </p>
+                    </div>
+                  )}
+                  {configLoaded && !config.termsAndConditions && (
+                    <div className="h-full flex items-center justify-center">
+                      <p className="text-[10px] text-gray-400 uppercase font-black">
+                        Los términos y condiciones serán configurados próximamente.
                       </p>
                     </div>
                   )}
@@ -1671,12 +1707,12 @@ export default function RegisterPage() {
                       $
                       {formData.metodoPago === "tarjeta"
                         ? Math.ceil(
-                            (formData.tipoPago === "completo"
-                              ? config.fullPaymentPrice
-                              : config.registrationFeePrice) *
-                              (1 + parseFloat(config.stripePercentage) / 100) +
-                              config.stripeFixedFee,
-                          )
+                          (formData.tipoPago === "completo"
+                            ? config.fullPaymentPrice
+                            : config.registrationFeePrice) *
+                          (1 + parseFloat(config.stripePercentage) / 100) +
+                          config.stripeFixedFee,
+                        )
                         : formData.tipoPago === "completo"
                           ? config.fullPaymentPrice
                           : config.registrationFeePrice}{" "}
@@ -1797,13 +1833,13 @@ export default function RegisterPage() {
                       onFileSelect={(file) => {
                         setFormData({ ...formData, comprobantePago: file });
                         const url = URL.createObjectURL(file);
-                        setPreviewUrl(url);
+                        setComprobantePreviewUrl(url);
                       }}
                       onRemove={() => {
                         setFormData({ ...formData, comprobantePago: null });
-                        setPreviewUrl(null);
+                        setComprobantePreviewUrl(null);
                       }}
-                      previewUrl={previewUrl}
+                      previewUrl={comprobantePreviewUrl}
                       fileName={formData.comprobantePago?.name}
                       label="Capturar Comprobante SPEI"
                       description="Toma una foto clara del comprobante de tu transferencia bancaria"
@@ -1834,13 +1870,13 @@ export default function RegisterPage() {
                       onFileSelect={(file) => {
                         setFormData({ ...formData, comprobantePago: file });
                         const url = URL.createObjectURL(file);
-                        setPreviewUrl(url);
+                        setComprobantePreviewUrl(url);
                       }}
                       onRemove={() => {
                         setFormData({ ...formData, comprobantePago: null });
-                        setPreviewUrl(null);
+                        setComprobantePreviewUrl(null);
                       }}
-                      previewUrl={previewUrl}
+                      previewUrl={comprobantePreviewUrl}
                       fileName={formData.comprobantePago?.name}
                       label="Capturar Ticket OXXO"
                       description="Toma una foto clara del ticket de depósito de OXXO"
@@ -1895,18 +1931,11 @@ export default function RegisterPage() {
                     <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
                     <div>
                       <p className="text-xs font-bold text-amber-900 uppercase tracking-wider">
-                        Pendiente de Liquidar
-                      </p>
-                      <p className="text-xs text-amber-800 leading-relaxed mt-1">
-                        Tienes hasta el 15 de Octubre para pagar el resto ($800
-                        MXN).
+                        Tu pago está en revisión
                       </p>
                     </div>
                   </div>
                 )}
-                <p className="text-sm text-gray-500 leading-relaxed font-medium">
-                  Hemos enviado los detalles de tu registro vía SMS.
-                </p>
                 <Button
                   className="h-16 w-full font-black text-lg shadow-xl mt-4 uppercase tracking-widest"
                   onClick={() => router.push("/dashboard")}
@@ -1976,7 +2005,7 @@ export default function RegisterPage() {
 
       {/* AGE RESTRICTION MODAL */}
 
-      <Modal isOpen={isAgeRestrictedModalOpen} onClose={() => {}}>
+      <Modal isOpen={isAgeRestrictedModalOpen} onClose={() => { }}>
         <ModalHeader>
           <ModalTitle className="text-2xl font-black text-secondary uppercase tracking-tighter text-center">
             Evento <span className="text-primary">Restringido</span>

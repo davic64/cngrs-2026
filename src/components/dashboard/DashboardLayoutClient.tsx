@@ -69,7 +69,7 @@ export default function DashboardLayoutClient({
           ))}
         </nav>
 
-        <div className="pt-8 border-t border-gray-50">
+        <div className="pt-8 border-t border-gray-50 space-y-4">
           <Button
             variant="ghost"
             onClick={handleLogout}
@@ -78,6 +78,9 @@ export default function DashboardLayoutClient({
             <LogOut size={18} />
             Cerrar Sesión
           </Button>
+          <p className="text-center text-[10px] text-secondary/30 font-semibold tracking-wider leading-relaxed">
+            Desarrollado por<br /><span className="text-primary/50 font-bold">LDV & Tribu JIDI</span>
+          </p>
         </div>
       </aside>
 
