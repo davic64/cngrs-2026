@@ -61,7 +61,7 @@ function saveRegText(data: Record<string, unknown>) {
   try {
     localStorage.setItem(REG_KEY, JSON.stringify(data));
     localStorage.setItem(REG_EXPIRY_KEY, String(Date.now() + TTL_24H));
-  } catch { }
+  } catch {}
 }
 
 function loadRegText(): Record<string, any> | null {
@@ -82,7 +82,7 @@ function clearRegStorage() {
   try {
     localStorage.removeItem(REG_KEY);
     localStorage.removeItem(REG_EXPIRY_KEY);
-  } catch { }
+  } catch {}
 }
 
 const _LOCALIDADES = [
@@ -320,7 +320,9 @@ export default function RegisterPage() {
   const [showManualLocalidad, setShowManualLocalidad] = React.useState(false);
   const [isDocumentVerified, setIsDocumentVerified] = React.useState(false);
   const [isIdValidating, setIsIdValidating] = React.useState(false);
-  const [comprobantePreviewUrl, setComprobantePreviewUrl] = React.useState<string | null>(null);
+  const [comprobantePreviewUrl, setComprobantePreviewUrl] = React.useState<
+    string | null
+  >(null);
   const [configLoaded, setConfigLoaded] = React.useState(false);
   const [isCompletingRegistration, setIsCompletingRegistration] =
     React.useState(false);
@@ -438,8 +440,7 @@ export default function RegisterPage() {
   const filteredLocalities = React.useMemo(() => {
     const options = dbLocalities
       .filter(
-        (loc) =>
-          loc.country === formData.pais && loc.state === formData.estado,
+        (loc) => loc.country === formData.pais && loc.state === formData.estado,
       )
       .map((loc) => ({ value: loc.name, label: loc.name }));
 
@@ -626,7 +627,7 @@ export default function RegisterPage() {
       console.error("Error en completeStripeRegistration:", error);
       alert(
         error.message ||
-        "Error al completar el registro. Por favor intenta de nuevo.",
+          "Error al completar el registro. Por favor intenta de nuevo.",
       );
       setIsCompletingRegistration(false);
       // Restaurar datos para reintentar
@@ -727,7 +728,7 @@ export default function RegisterPage() {
       } else {
         alert(
           result.error ||
-          "No se pudo conectar con la pasarela de pagos. Intenta más tarde.",
+            "No se pudo conectar con la pasarela de pagos. Intenta más tarde.",
         );
         setIsProcessing(false);
       }
@@ -973,7 +974,8 @@ export default function RegisterPage() {
             Registro <span className="text-primary">CNGRS26</span>
           </h1>
           <p className="text-[10px] font-semibold text-secondary/40 tracking-wider mt-1">
-            Desarrollado por <span className="text-primary/60 font-bold">LDV & Tribu JIDI</span>
+            Desarrollado por{" "}
+            <span className="text-primary/60 font-bold">LDV</span>
           </p>
         </div>
 
@@ -1500,7 +1502,8 @@ export default function RegisterPage() {
                   {configLoaded && !config.termsAndConditions && (
                     <div className="h-full flex items-center justify-center">
                       <p className="text-[10px] text-gray-400 uppercase font-black">
-                        Los términos y condiciones serán configurados próximamente.
+                        Los términos y condiciones serán configurados
+                        próximamente.
                       </p>
                     </div>
                   )}
@@ -1707,12 +1710,12 @@ export default function RegisterPage() {
                       $
                       {formData.metodoPago === "tarjeta"
                         ? Math.ceil(
-                          (formData.tipoPago === "completo"
-                            ? config.fullPaymentPrice
-                            : config.registrationFeePrice) *
-                          (1 + parseFloat(config.stripePercentage) / 100) +
-                          config.stripeFixedFee,
-                        )
+                            (formData.tipoPago === "completo"
+                              ? config.fullPaymentPrice
+                              : config.registrationFeePrice) *
+                              (1 + parseFloat(config.stripePercentage) / 100) +
+                              config.stripeFixedFee,
+                          )
                         : formData.tipoPago === "completo"
                           ? config.fullPaymentPrice
                           : config.registrationFeePrice}{" "}
@@ -1828,8 +1831,15 @@ export default function RegisterPage() {
                           {config.bankHolder || "JIDI Internacional A.C."}
                         </span>
                       </p>
+                      <p className="text-xs font-bold uppercase">
+                        Concepto:{" "}
+                        <span className="text-primary">
+                          {formData.nombre} {formData.apellido}
+                        </span>
+                      </p>
                     </div>
                     <PaymentProofCapture
+                      allowGallery
                       onFileSelect={(file) => {
                         setFormData({ ...formData, comprobantePago: file });
                         const url = URL.createObjectURL(file);
@@ -2005,7 +2015,7 @@ export default function RegisterPage() {
 
       {/* AGE RESTRICTION MODAL */}
 
-      <Modal isOpen={isAgeRestrictedModalOpen} onClose={() => { }}>
+      <Modal isOpen={isAgeRestrictedModalOpen} onClose={() => {}}>
         <ModalHeader>
           <ModalTitle className="text-2xl font-black text-secondary uppercase tracking-tighter text-center">
             Evento <span className="text-primary">Restringido</span>

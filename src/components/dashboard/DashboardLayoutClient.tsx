@@ -79,7 +79,9 @@ export default function DashboardLayoutClient({
             Cerrar Sesión
           </Button>
           <p className="text-center text-[10px] text-secondary/30 font-semibold tracking-wider leading-relaxed">
-            Desarrollado por<br /><span className="text-primary/50 font-bold">LDV & Tribu JIDI</span>
+            Desarrollado por
+            <br />
+            <span className="text-primary/50 font-bold">LDV</span>
           </p>
         </div>
       </aside>

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { AlertCircle, Camera, CheckCircle2, X } from "lucide-react";
+import { AlertCircle, Camera, CheckCircle2, ImageUp, X } from "lucide-react";
 
 interface PaymentProofCaptureProps {
   onFileSelect: (file: File) => void;
@@ -12,6 +12,7 @@ interface PaymentProofCaptureProps {
   errorMessage?: string | null;
   label?: string;
   description?: string;
+  allowGallery?: boolean;
 }
 
 export function PaymentProofCapture({
@@ -23,8 +24,10 @@ export function PaymentProofCapture({
   errorMessage,
   label = "Tomar Foto del Comprobante",
   description,
+  allowGallery = false,
 }: PaymentProofCaptureProps) {
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const cameraInputRef = React.useRef<HTMLInputElement>(null);
+  const galleryInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -96,7 +99,54 @@ export function PaymentProofCapture({
     );
   }
 
-  // Estado inicial: botón que abre la cámara nativa
+  // Estado inicial
+  if (allowGallery) {
+    return (
+      <div className="flex flex-col items-center gap-4 w-full">
+        {description && (
+          <p className="text-[10px] text-gray-600 text-center font-medium">
+            {description}
+          </p>
+        )}
+        <div className="grid grid-cols-2 gap-3 w-full">
+          <label className="flex flex-col items-center justify-center gap-3 w-full aspect-square border-4 border-dashed border-primary/30 hover:border-primary hover:bg-primary/5 rounded-3xl transition-all cursor-pointer">
+            <Camera className="h-10 w-10 text-primary" />
+            <span className="text-xs font-bold text-secondary uppercase text-center px-2">
+              {label}
+            </span>
+            <span className="text-[9px] text-gray-500 uppercase font-semibold">
+              Tomar foto
+            </span>
+            <input
+              ref={cameraInputRef}
+              type="file"
+              className="hidden"
+              accept="image/jpeg,image/png,image/webp"
+              capture="environment"
+              onChange={handleFileChange}
+            />
+          </label>
+          <label className="flex flex-col items-center justify-center gap-3 w-full aspect-square border-4 border-dashed border-primary/30 hover:border-primary hover:bg-primary/5 rounded-3xl transition-all cursor-pointer">
+            <ImageUp className="h-10 w-10 text-primary" />
+            <span className="text-xs font-bold text-secondary uppercase text-center px-2">
+              Subir Imagen
+            </span>
+            <span className="text-[9px] text-gray-500 uppercase font-semibold">
+              Desde galería
+            </span>
+            <input
+              ref={galleryInputRef}
+              type="file"
+              className="hidden"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleFileChange}
+            />
+          </label>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center gap-4 w-full">
       {description && (
@@ -113,7 +163,7 @@ export function PaymentProofCapture({
           Usa la cámara de tu dispositivo
         </span>
         <input
-          ref={fileInputRef}
+          ref={cameraInputRef}
           type="file"
           className="hidden"
           accept="image/jpeg,image/png,image/webp"

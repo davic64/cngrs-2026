@@ -203,7 +203,8 @@ export function LoginClient() {
             Yo Soy • JIDI • CNGRS26
           </p>
           <p className="text-[10px] font-semibold text-secondary/40 tracking-wider">
-            Desarrollado por <span className="text-primary/60 font-bold">LDV & Tribu JIDI</span>
+            Desarrollado por{" "}
+            <span className="text-primary/60 font-bold">LDV</span>
           </p>
         </div>
       </motion.div>
