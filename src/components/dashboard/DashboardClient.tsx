@@ -100,6 +100,27 @@ export function DashboardClient({
 
   const qrRef = React.useRef<SVGSVGElement>(null);
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      let finalFile = file;
+      if (file.type.startsWith("image/")) {
+        try {
+          const imageCompression = (await import("browser-image-compression")).default;
+          const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
+          const compressedBlob = await imageCompression(file, options);
+          finalFile = new File([compressedBlob], file.name, { type: file.type });
+        } catch (error) {
+          console.error("Error comprimiendo imagen:", error);
+        }
+      }
+      setPaymentFile(finalFile);
+    } else {
+      setPaymentFile(null);
+    }
+    e.target.value = "";
+  };
+
   const paymentAmount =
     paymentMode === "full" ? balance : parseInt(partialAmount) || 0;
 
@@ -699,10 +720,8 @@ export function DashboardClient({
                       <input
                         type="file"
                         className="hidden"
-                        accept="image/jpeg,image/png,image/webp"
-                        onChange={(e) =>
-                          setPaymentFile(e.target.files?.[0] || null)
-                        }
+                        accept="image/*"
+                        onChange={handleFileChange}
                       />
                     </label>
                   </div>

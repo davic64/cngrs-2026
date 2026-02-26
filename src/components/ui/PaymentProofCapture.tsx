@@ -29,9 +29,22 @@ export function PaymentProofCapture({
   const cameraInputRef = React.useRef<HTMLInputElement>(null);
   const galleryInputRef = React.useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) onFileSelect(file);
+    if (file) {
+      let finalFile = file;
+      if (file.type.startsWith("image/")) {
+        try {
+          const imageCompression = (await import("browser-image-compression")).default;
+          const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
+          const compressedBlob = await imageCompression(file, options);
+          finalFile = new File([compressedBlob], file.name, { type: file.type });
+        } catch (error) {
+          console.error("Error comprimiendo imagen:", error);
+        }
+      }
+      onFileSelect(finalFile);
+    }
     // Reset input so the same file can be re-selected if needed
     e.target.value = "";
   };
@@ -121,7 +134,7 @@ export function PaymentProofCapture({
               ref={cameraInputRef}
               type="file"
               className="hidden"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/*"
               capture="environment"
               onChange={handleFileChange}
             />
@@ -138,7 +151,7 @@ export function PaymentProofCapture({
               ref={galleryInputRef}
               type="file"
               className="hidden"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/*"
               onChange={handleFileChange}
             />
           </label>
@@ -166,7 +179,7 @@ export function PaymentProofCapture({
           ref={cameraInputRef}
           type="file"
           className="hidden"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/*"
           capture="environment"
           onChange={handleFileChange}
         />

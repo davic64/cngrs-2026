@@ -15,6 +15,7 @@ export async function createCheckoutSession(
   type: "completo" | "inscripcion",
   sessionId?: string,
   userName?: string,
+  age?: number,
 ) {
   try {
     if (!process.env.STRIPE_SECRET_KEY) {
@@ -23,6 +24,22 @@ export async function createCheckoutSession(
 
     if (!process.env.NEXT_PUBLIC_APP_URL) {
       throw new Error("NEXT_PUBLIC_APP_URL no está configurada en el servidor");
+    }
+
+    if (!userId && age !== undefined) {
+      if (age > 29) {
+        const { getAdultCompanionCount } = await import("@/app/actions/ocr");
+        const adultCount = await getAdultCompanionCount();
+        if (adultCount >= 50) {
+          throw new Error("Lo sentimos, el cupo de adultos acompañantes está lleno.");
+        }
+      } else {
+        const { getRegularRegistrationCount } = await import("@/app/actions/ocr");
+        const regularCount = await getRegularRegistrationCount();
+        if (regularCount >= 500) {
+          throw new Error("Lo sentimos, el cupo de asistentes generales está lleno.");
+        }
+      }
     }
 
     // 1. Obtener precios actuales de la DB

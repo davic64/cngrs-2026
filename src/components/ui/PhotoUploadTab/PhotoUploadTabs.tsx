@@ -54,16 +54,31 @@ export function PhotoUploadTabs({
     }
   }, [cameraOnly, method]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       // Validar que sea una imagen (incluyendo HEIC/HEIF de iOS)
       const isImage = file.type.startsWith("image/");
       if (!isImage) {
-        alert("Solo se permiten archivos de imagen (JPG, PNG, WebP)");
+        alert("Solo se permiten archivos de imagen");
         return;
       }
-      onFileSelect(file);
+      
+      let finalFile = file;
+      try {
+        const imageCompression = (await import("browser-image-compression")).default;
+        const options = {
+          maxSizeMB: 1,
+          maxWidthOrHeight: 1920,
+          useWebWorker: true,
+        };
+        const compressedBlob = await imageCompression(file, options);
+        finalFile = new File([compressedBlob], file.name, { type: file.type });
+      } catch (error) {
+        console.error("Error comprimiendo imagen:", error);
+      }
+
+      onFileSelect(finalFile);
       setMethod(null);
     }
   };
@@ -188,7 +203,7 @@ export function PhotoUploadTabs({
           </button>
         </div>
         <p className="text-[10px] text-gray-400 text-center">
-          Solo imágenes (JPG, PNG, WebP)
+          Cualquier formato de imagen
         </p>
       </div>
     );
@@ -234,7 +249,7 @@ export function PhotoUploadTabs({
           ref={method === "camera" ? cameraInputRef : uploadInputRef}
           type="file"
           className="hidden"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/*"
           capture={method === "camera" ? "environment" : undefined}
           onChange={handleFileChange}
           disabled={isLoading}

@@ -19,6 +19,7 @@
     "@google-cloud/vision": "^5.3.4",
     "@neondatabase/serverless": "^1.0.2",
     "bcryptjs": "^3.0.3",
+    "browser-image-compression": "^2.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^17.3.1",

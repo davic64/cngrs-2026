@@ -708,6 +708,7 @@ export default function RegisterPage() {
         formData.tipoPago as "completo" | "inscripcion",
         stripeSessionId,
         `${formData.nombre} ${formData.apellido}`.trim(),
+        parseInt(formData.edad || "0", 10),
       );
 
       if (result.success && result.url) {
@@ -1017,7 +1018,7 @@ export default function RegisterPage() {
                     placeholder="Tu número de celular"
                     value={formData.telefono}
                     onChange={(e) =>
-                      setFormData({ ...formData, telefono: e.target.value })
+                      setFormData({ ...formData, telefono: e.target.value.replace(/[^0-9]/g, "") })
                     }
                   />
                   <Input
@@ -1994,7 +1995,7 @@ export default function RegisterPage() {
             label="Teléfono"
             value={tempContacto.telefono}
             onChange={(e) =>
-              setTempContacto({ ...tempContacto, telefono: e.target.value })
+              setTempContacto({ ...tempContacto, telefono: e.target.value.replace(/[^0-9]/g, "") })
             }
           />
         </ModalContent>

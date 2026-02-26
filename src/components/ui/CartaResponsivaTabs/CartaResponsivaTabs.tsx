@@ -56,10 +56,21 @@ export function CartaResponsivaTabs({
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      onFileSelect(file);
+      let finalFile = file;
+      if (file.type.startsWith("image/")) {
+        try {
+          const imageCompression = (await import("browser-image-compression")).default;
+          const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
+          const compressedBlob = await imageCompression(file, options);
+          finalFile = new File([compressedBlob], file.name, { type: file.type });
+        } catch (error) {
+          console.error("Error comprimiendo imagen:", error);
+        }
+      }
+      onFileSelect(finalFile);
       setUploadMethod(null);
     }
   };

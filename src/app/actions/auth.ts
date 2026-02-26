@@ -73,6 +73,15 @@ export async function registerUser(formData: FormData) {
           error: "Lo sentimos, el cupo de adultos acompañantes está lleno.",
         };
       }
+    } else {
+      const { getRegularRegistrationCount } = await import("@/app/actions/ocr");
+      const regularCount = await getRegularRegistrationCount();
+      if (regularCount >= 500) {
+        return {
+          success: false,
+          error: "Lo sentimos, el cupo de asistentes generales está lleno.",
+        };
+      }
     }
 
     const gender = formData.get("genero") as "M" | "F" | "Otro";
