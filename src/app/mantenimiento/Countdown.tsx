@@ -2,22 +2,9 @@
 
 import * as React from "react";
 
-// Duracion del mantenimiento en horas. Ajusta aqui si cambia el tiempo.
-const MAINTENANCE_HOURS = 18;
-const STORAGE_KEY = "cngrs_maintenance_end";
-
-function getEndTime(): number {
-  // Ancla la cuenta regresiva en localStorage para que sea estable entre recargas.
-  if (typeof window === "undefined") return 0;
-  const stored = window.localStorage.getItem(STORAGE_KEY);
-  if (stored) {
-    const parsed = parseInt(stored, 10);
-    if (!Number.isNaN(parsed)) return parsed;
-  }
-  const end = Date.now() + MAINTENANCE_HOURS * 60 * 60 * 1000;
-  window.localStorage.setItem(STORAGE_KEY, String(end));
-  return end;
-}
+// Fecha/hora fija de fin del mantenimiento, IGUAL para todos los usuarios.
+// Ajusta este valor si cambia la hora de salida (zona -06:00, CDMX).
+const MAINTENANCE_END = new Date("2026-06-16T14:00:00-06:00").getTime();
 
 function format(n: number): string {
   return String(n).padStart(2, "0");
@@ -27,8 +14,7 @@ export default function Countdown() {
   const [remaining, setRemaining] = React.useState<number | null>(null);
 
   React.useEffect(() => {
-    const end = getEndTime();
-    const tick = () => setRemaining(Math.max(0, end - Date.now()));
+    const tick = () => setRemaining(Math.max(0, MAINTENANCE_END - Date.now()));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
