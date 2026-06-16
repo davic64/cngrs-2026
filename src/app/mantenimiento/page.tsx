@@ -24,7 +24,7 @@ export default function MaintenancePage() {
         </div>
 
         <p className="text-sm sm:text-base text-white/60 font-medium leading-relaxed px-2">
-          Estamos afinando algunos detalles para mejorar tu experiencia.
+          Estamos arreglando unas cositas para mejorar tu experiencia.
           <br className="hidden sm:block" />
           Vuelve mañana — el registro estará habilitado.
         </p>
