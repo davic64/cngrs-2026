@@ -1,7 +1,17 @@
 "use server";
 
 import bcrypt from "bcryptjs";
-import { and, asc, count, desc, eq, sum } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  countDistinct,
+  desc,
+  eq,
+  notInArray,
+  sql,
+  sum,
+} from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import {
@@ -33,17 +43,43 @@ export async function createLocality(data: {
   state: string;
   country: string;
 }) {
-  await db.insert(localities).values(data);
+  const name = data.name.trim();
+  const state = data.state.trim();
+  const country = data.country.trim();
+
+  // Duplicado: misma localidad/estado/país comparando en minúsculas
+  const existing = await db
+    .select({ id: localities.id })
+    .from(localities)
+    .where(
+      and(
+        sql`lower(${localities.name}) = ${name.toLowerCase()}`,
+        sql`lower(${localities.state}) = ${state.toLowerCase()}`,
+        sql`lower(${localities.country}) = ${country.toLowerCase()}`,
+      ),
+    );
+
+  if (existing.length > 0) {
+    return { success: false as const, error: "Ya existe esa localidad" };
+  }
+
+  const [inserted] = await db
+    .insert(localities)
+    .values({ name, state, country })
+    .returning({ id: localities.id });
+
   revalidatePath("/admin/dashboard");
   revalidatePath("/admin/localities");
   revalidatePath("/auth/register");
-  return { success: true };
+  return { success: true as const, id: inserted.id };
 }
 
 export async function deleteLocality(id: number) {
   await db.delete(localities).where(eq(localities.id, id));
   revalidatePath("/admin/dashboard");
+  revalidatePath("/admin/localities");
   revalidatePath("/auth/register");
+  return { success: true };
 }
 
 export async function updateLocality(
@@ -271,8 +307,9 @@ export async function getAdminStats() {
       .from(users)
       .where(eq(users.role, "user"));
 
+    // Asistentes distintos con al menos un pago validado (no filas de pago)
     const [validatedPayments] = await db
-      .select({ value: count() })
+      .select({ value: countDistinct(payments.userId) })
       .from(payments)
       .innerJoin(users, eq(payments.userId, users.id))
       .where(and(eq(payments.status, "completado"), eq(users.role, "user")));
@@ -310,6 +347,26 @@ export async function getAdminStats() {
 export async function getPendingPayments() {
   return await db.query.payments.findMany({
     where: eq(payments.status, "revision"),
+    with: {
+      user: true,
+    },
+    orderBy: [desc(payments.createdAt)],
+  });
+}
+
+export async function getRejectedPayments() {
+  // Usuarios que ya tienen al menos un pago validado (no hay que contactarlos)
+  const paid = await db
+    .selectDistinct({ id: payments.userId })
+    .from(payments)
+    .where(eq(payments.status, "completado"));
+  const paidIds = paid.map((p) => p.id);
+
+  return await db.query.payments.findMany({
+    where: and(
+      eq(payments.status, "rechazado"),
+      paidIds.length > 0 ? notInArray(payments.userId, paidIds) : undefined,
+    ),
     with: {
       user: true,
     },

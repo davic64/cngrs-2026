@@ -1,7 +1,7 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { Building2, Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { AlertCircle, Building2, Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import * as React from "react";
 import {
   createLocality,
@@ -212,6 +212,12 @@ export function AdminLocalitiesClient({
   });
   const [showManualState, setShowManualState] = React.useState(false);
   const [isAdding, setIsAdding] = React.useState(false);
+  const [toast, setToast] = React.useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
 
   // Filter state for the list
   const [filterCountry, setFilterCountry] = React.useState("");
@@ -229,11 +235,13 @@ export function AdminLocalitiesClient({
   const handleAdd = async () => {
     if (!newLocality.name || !newLocality.state) return;
     setIsAdding(true);
-    await createLocality(newLocality);
-    setLocalities((prev) => [
-      ...prev,
-      { id: Date.now(), ...newLocality },
-    ]);
+    const result = await createLocality(newLocality);
+    if (!result.success) {
+      showToast(result.error || "No se pudo registrar la localidad");
+      setIsAdding(false);
+      return;
+    }
+    setLocalities((prev) => [...prev, { id: result.id, ...newLocality }]);
     setNewLocality({ ...newLocality, name: "", state: "" });
     setShowManualState(false);
     setIsAdding(false);
@@ -554,6 +562,22 @@ export function AdminLocalitiesClient({
           )}
         </div>
       </div>
+
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-secondary text-white px-5 py-3 rounded-2xl shadow-2xl"
+          >
+            <AlertCircle size={18} className="text-amber-400 shrink-0" />
+            <span className="text-xs font-bold uppercase tracking-widest">
+              {toast}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

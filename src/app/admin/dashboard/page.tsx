@@ -4,6 +4,7 @@ import {
   getCartaResponsivaTemplate,
   getLocalities,
   getPendingPayments,
+  getRejectedPayments,
   getSettings,
 } from "@/app/actions/admin";
 import { getSessionUser } from "@/app/actions/auth";
@@ -25,12 +26,14 @@ export default async function AdminDashboardPage() {
   const [
     stats,
     pendingPayments,
+    rejectedPayments,
     config,
     allLocalities,
     cartaResponsiva,
   ] = await Promise.all([
     getAdminStats(),
     getPendingPayments(),
+    getRejectedPayments(),
     getSettings(),
     getLocalities(),
     getCartaResponsivaTemplate(),
@@ -40,6 +43,7 @@ export default async function AdminDashboardPage() {
     <AdminDashboardClient
       stats={stats}
       pendingPayments={pendingPayments}
+      rejectedPayments={rejectedPayments}
       config={config}
       cartaResponsivaUrl={
         cartaResponsiva.success ? (cartaResponsiva.templateUrl ?? null) : null
