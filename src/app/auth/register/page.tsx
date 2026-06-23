@@ -35,6 +35,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { PhotoUploadTabs } from "@/components/ui/PhotoUploadTab/PhotoUploadTabs";
+import { verifyIsIdDocument } from "@/lib/id-check";
 import { CartaResponsivaTabs } from "@/components/ui/CartaResponsivaTabs/CartaResponsivaTabs";
 import { EditorResultRenderer } from "@/components/ui/EditorResultRenderer";
 import { Input } from "@/components/ui/Input";
@@ -320,6 +321,8 @@ export default function RegisterPage() {
   const [showManualLocalidad, setShowManualLocalidad] = React.useState(false);
   const [isDocumentVerified, setIsDocumentVerified] = React.useState(false);
   const [isIdValidating, setIsIdValidating] = React.useState(false);
+  const [idCheckError, setIdCheckError] = React.useState<string | null>(null);
+  const [idAttempts, setIdAttempts] = React.useState(0);
   const [comprobantePreviewUrl, setComprobantePreviewUrl] = React.useState<
     string | null
   >(null);
@@ -1113,10 +1116,21 @@ export default function RegisterPage() {
                       <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-1">
                         {needsResponsiva
                           ? "Menores de 18"
-                          : "INE, ID, Pasaporte o Documento Oficial"}
+                          : "INE o Pasaporte"}
                       </p>
                     </div>
                   </div>
+                  {!needsResponsiva && (
+                    <p className="text-xs text-gray-500 font-medium leading-snug -mt-2">
+                      <span className="font-bold text-secondary">En México:</span>{" "}
+                      INE o Pasaporte.{" "}
+                      <span className="font-bold text-secondary">
+                        Fuera de México:
+                      </span>{" "}
+                      solo Pasaporte (USA, Canadá, El Salvador, Guatemala,
+                      Honduras...).
+                    </p>
+                  )}
 
                   {/* Carta Responsiva para menores */}
                   {needsResponsiva ? (
@@ -1145,16 +1159,33 @@ export default function RegisterPage() {
                     <div className="space-y-4">
                       <PhotoUploadTabs
                         cameraOnly={true}
-                        onFileSelect={(file) => {
+                        onFileSelect={async (file) => {
                           setFormData({ ...formData, documento: file });
                           const url = URL.createObjectURL(file);
                           setPreviewUrl(url);
                           setIsIdValidating(true);
                           setIsDocumentVerified(false);
-                          setTimeout(() => {
-                            setIsIdValidating(false);
+                          setIdCheckError(null);
+                          let isId = false;
+                          try {
+                            isId = await verifyIsIdDocument(file);
+                          } catch (e) {
+                            console.error("Error validando ID:", e);
+                            isId = true; // ponytail: don't block users if OCR engine fails
+                          }
+                          const attempts = idAttempts + 1;
+                          setIdAttempts(attempts);
+                          setIsIdValidating(false);
+                          // Accept if it looks like an ID, or after 3 tries let it
+                          // through for admin review (avoid locking out real users).
+                          if (isId || attempts >= 3) {
                             setIsDocumentVerified(true);
-                          }, 2000);
+                          } else {
+                            setIsDocumentVerified(false);
+                            setIdCheckError(
+                              "No reconocimos una identificación oficial. Asegúrate de que se lea bien (INE, pasaporte, etc.).",
+                            );
+                          }
                         }}
                         previewUrl={previewUrl}
                         fileName={formData.documento?.name}
@@ -1163,15 +1194,15 @@ export default function RegisterPage() {
                           setPreviewUrl(null);
                           setIsDocumentVerified(false);
                           setIsIdValidating(false);
+                          setIdCheckError(null);
                         }}
                         width="w-full"
                         height="h-64"
                         isLoading={isIdValidating}
                         isVerified={isDocumentVerified}
                         verificationMessage="Identificación Validada"
-                        errorMessage={null}
+                        errorMessage={idCheckError}
                         subMessage={null}
-                        description="Captura tu INE, ID, Pasaporte o Documento Oficial"
                       />{" "}
                     </div>
                   )}
