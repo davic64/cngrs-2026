@@ -3,8 +3,11 @@
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   CreditCard,
+  Download,
   ExternalLink,
   Eye,
   FileText,
@@ -12,6 +15,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import * as React from "react";
 import {
   deleteUser,
@@ -46,12 +50,164 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
   const [resetError, setResetError] = React.useState("");
   const [tempPassword, setTempPassword] = React.useState("");
 
+  const searchParams = useSearchParams();
+  const PAGE_SIZE = 20;
+  const [page, setPage] = React.useState(1);
+
+  // Abrir expediente automáticamente si llega ?user=<id> (desde el dashboard)
+  React.useEffect(() => {
+    const id = searchParams.get("user");
+    if (id) {
+      const u = initialUsers.find((x) => x.id === id);
+      if (u) setSelectedUser(u);
+    }
+  }, [searchParams, initialUsers]);
+
   const filteredUsers = initialUsers.filter(
     (u) =>
       u.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.phone.includes(searchTerm),
   );
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageUsers = filteredUsers.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  );
+
+  const goToPage = (p: number) => {
+    setPage(p);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // Números a mostrar: 1, última, y ±1 alrededor de la actual, con elipsis
+  const pageItems: (number | "...")[] = [];
+  for (let p = 1; p <= totalPages; p++) {
+    if (p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1) {
+      pageItems.push(p);
+    } else if (pageItems[pageItems.length - 1] !== "...") {
+      pageItems.push("...");
+    }
+  }
+
+  const handleExport = async () => {
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Asistentes", {
+      views: [{ state: "frozen", ySplit: 1 }],
+    });
+
+    // Datos primero; imágenes/documentos al final
+    ws.columns = [
+      { header: "Nombre", key: "firstName", width: 18 },
+      { header: "Apellido", key: "lastName", width: 18 },
+      { header: "Teléfono", key: "phone", width: 16 },
+      { header: "Edad", key: "age", width: 8 },
+      { header: "Género", key: "gender", width: 12 },
+      { header: "Talla", key: "shirtSize", width: 8 },
+      { header: "País", key: "country", width: 16 },
+      { header: "Estado", key: "state", width: 18 },
+      { header: "Localidad", key: "locality", width: 20 },
+      { header: "Estatus", key: "status", width: 14 },
+      { header: "Contacto Emergencia", key: "ecName", width: 22 },
+      { header: "Tel. Emergencia", key: "ecPhone", width: 16 },
+      { header: "Alergias", key: "allergies", width: 20 },
+      { header: "Padecimientos", key: "conditions", width: 20 },
+      { header: "Medicamentos", key: "medications", width: 20 },
+      { header: "Dosis/Frecuencia", key: "dosage", width: 18 },
+      { header: "Total Pagado (MXN)", key: "totalPaid", width: 18 },
+      { header: "Fecha Registro", key: "createdAt", width: 16 },
+      { header: "Foto Perfil (URL)", key: "profileUrl", width: 50 },
+      { header: "Documento (URL)", key: "documentUrl", width: 50 },
+    ];
+
+    const genderLabel = (g: string) =>
+      g === "M" ? "Masculino" : g === "F" ? "Femenino" : "Otro";
+
+    for (const u of initialUsers) {
+      const payments: { status: string; amount: number }[] = u.payments ?? [];
+      const totalPaid = payments
+        .filter((p) => p.status === "completado")
+        .reduce((sum, p) => sum + p.amount, 0);
+      ws.addRow({
+        firstName: u.firstName,
+        lastName: u.lastName,
+        phone: u.phone,
+        age: u.age,
+        gender: genderLabel(u.gender),
+        shirtSize: u.shirtSize,
+        country: u.country,
+        state: u.state,
+        locality: u.locality,
+        status: u.registrationStatus,
+        ecName: u.emergencyContact?.name ?? "",
+        ecPhone: u.emergencyContact?.phone ?? "",
+        allergies: u.healthInfo?.allergies ?? "",
+        conditions: u.healthInfo?.conditions ?? "",
+        medications: u.healthInfo?.medications ?? "",
+        dosage: u.healthInfo?.dosageFrequency ?? "",
+        totalPaid,
+        createdAt: new Date(u.createdAt).toLocaleDateString("es-MX"),
+        profileUrl: u.profilePhotoUrl ?? "",
+        documentUrl: u.documentUrl ?? "",
+      });
+    }
+
+    // Header con estilo (navy de marca + texto blanco)
+    const header = ws.getRow(1);
+    header.height = 24;
+    header.eachCell((cell) => {
+      cell.font = {
+        name: "Arial",
+        bold: true,
+        color: { argb: "FFFFFFFF" },
+        size: 11,
+      };
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF151B2E" },
+      };
+      cell.alignment = { vertical: "middle", horizontal: "left" };
+    });
+    ws.autoFilter = { from: "A1", to: { row: 1, column: ws.columns.length } };
+
+    // URLs: ajustar texto para que no se salgan de la celda
+    ws.getColumn("profileUrl").alignment = { wrapText: true, vertical: "top" };
+    ws.getColumn("documentUrl").alignment = { wrapText: true, vertical: "top" };
+
+    // Zebra + bordes suaves + Arial en datos
+    ws.eachRow((row, n) => {
+      row.eachCell((cell) => {
+        cell.border = {
+          bottom: { style: "thin", color: { argb: "FFE5E7EB" } },
+        };
+        if (n > 1) cell.font = { name: "Arial", size: 10 };
+      });
+      if (n > 1 && n % 2 === 0) {
+        row.eachCell((cell) => {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFF3F4F6" },
+          };
+        });
+      }
+    });
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "asistentes-cngrs26.xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const handleDelete = async (id: string) => {
     if (!confirm("¿Seguro que quieres eliminar a este asistente?")) return;
@@ -125,6 +281,12 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
             Gestión de <span className="text-primary">Asistentes</span>
           </h1>
         </div>
+        <Button
+          onClick={handleExport}
+          className="shrink-0 h-12 font-black uppercase text-xs tracking-widest shadow-lg shadow-primary/20"
+        >
+          <Download size={18} className="mr-2" /> Descargar Excel
+        </Button>
       </header>
 
       <DashboardCard>
@@ -132,7 +294,10 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
           <Input
             placeholder="Buscar por nombre o teléfono..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setPage(1);
+            }}
             className="max-w-md"
           />
         </div>
@@ -156,7 +321,7 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
               </tr>
             </thead>
             <tbody>
-              {filteredUsers.map((user) => (
+              {pageUsers.map((user) => (
                 <tr
                   key={user.id}
                   className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
@@ -202,6 +367,51 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
               ))}
             </tbody>
           </table>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-6 border-t border-gray-100">
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+            {filteredUsers.length} asistentes • Página {currentPage} de{" "}
+            {totalPages}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage <= 1}
+              onClick={() => goToPage(currentPage - 1)}
+            >
+              <ChevronLeft size={16} className="mr-1" /> Anterior
+            </Button>
+            {pageItems.map((item, i) =>
+              item === "..." ? (
+                <span
+                  key={`gap-${pageItems[i - 1]}`}
+                  className="px-1 text-[10px] font-black text-gray-300"
+                >
+                  …
+                </span>
+              ) : (
+                <Button
+                  key={item}
+                  variant={item === currentPage ? "primary" : "outline"}
+                  size="sm"
+                  className="min-w-9 px-0"
+                  onClick={() => goToPage(item)}
+                >
+                  {item}
+                </Button>
+              ),
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage >= totalPages}
+              onClick={() => goToPage(currentPage + 1)}
+            >
+              Siguiente <ChevronRight size={16} className="ml-1" />
+            </Button>
+          </div>
         </div>
       </DashboardCard>
 
@@ -459,7 +669,8 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
                             >
                               {status.label}
                             </span>
-                            {payment.proofUrl && (
+                            {payment.proofUrl &&
+                              payment.status !== "rechazado" && (
                               <a
                                 href={payment.proofUrl}
                                 target="_blank"
