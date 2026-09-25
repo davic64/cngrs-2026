@@ -1,10 +1,19 @@
 "use server";
 
+import bcrypt from "bcryptjs";
 import Stripe from "stripe";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { payments, settings, users } from "@/db/schema";
+import { payments, pendingRegistrations, users } from "@/db/schema";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
+import {
+  checkCapacity,
+  finalizeCardRegistration,
+  isPhoneTaken,
+  type PendingRegistrationData,
+  validateRegistration,
+} from "@/lib/registration";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2024-12-18.acacia" as any,
@@ -148,62 +157,75 @@ export async function verifyStripeSession(sessionId: string) {
   }
 }
 
-export async function recordNewRegistrationPayment(
-  userId: string,
-  sessionId: string,
-  baseAmount: number,
-  paymentType: "completo" | "inscripcion",
-) {
+// Guarda el registro con tarjeta en el servidor antes de ir a Stripe.
+// Valida datos, teléfono y cupo aquí para no cobrar a quien no puede registrarse.
+export async function savePendingRegistration(formData: FormData) {
+  const validation = validateRegistration(formData);
+  if (!validation.ok) return { success: false, error: validation.error };
+  const { password, ...data } = validation.data;
+
   try {
-    // Verificar que el pago fue realizado en Stripe
-    const stripeSession = await stripe.checkout.sessions.retrieve(sessionId);
-
-    if (stripeSession.payment_status !== "paid") {
-      return {
-        success: false,
-        error: "El pago en Stripe no fue completado",
-      };
+    if (await isPhoneTaken(data.phone)) {
+      return { success: false, error: "El número telefónico ya está registrado" };
     }
+    const capacityError = await checkCapacity(data.age);
+    if (capacityError) return { success: false, error: capacityError };
 
-    // Registrar el pago en la BD
-    await db.insert(payments).values({
-      userId,
-      amount: baseAmount,
-      type: paymentType,
-      method: "tarjeta",
-      status: "completado",
-    });
-
-    // Calcular nuevo status del usuario
-    const userPayments = await db.query.payments.findMany({
-      where: (payments, { and, eq }) =>
-        and(eq(payments.userId, userId), eq(payments.status, "completado")),
-    });
-
-    const totalPaid = userPayments.reduce((acc, p) => acc + p.amount, 0);
-    const config = await db.query.settings.findFirst();
-    const requiredAmount = config?.fullPaymentPrice || 1500;
-
-    const newStatus = totalPaid >= requiredAmount ? "completado" : "parcial";
+    const id =
+      (formData.get("sessionId") as string) ||
+      `reg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+    const values = {
+      data: {
+        ...data,
+        profilePhotoUrl: (formData.get("profilePhotoUrl") as string) || "",
+        documentUrl: (formData.get("documentUrl") as string) || "",
+      } satisfies PendingRegistrationData,
+      passwordHash: await bcrypt.hash(password, 10),
+      paymentType: data.paymentType,
+      status: "pending",
+      error: null,
+    };
 
     await db
-      .update(users)
-      .set({ registrationStatus: newStatus })
-      .where(eq(users.id, userId));
+      .insert(pendingRegistrations)
+      .values({ id, ...values })
+      .onConflictDoUpdate({ target: pendingRegistrations.id, set: values });
 
-    revalidatePath("/dashboard");
-
-    return {
-      success: true,
-      registrationStatus: newStatus,
-      totalPaid,
-      requiredAmount,
-    };
-  } catch (error: any) {
-    console.error("Error al registrar pago de nuevo usuario:", error);
+    return { success: true, id };
+  } catch (error) {
+    console.error("Error guardando registro pendiente:", error);
     return {
       success: false,
-      error: "No se pudo registrar el pago. Por favor contacta soporte.",
+      error: "No se pudo guardar tu registro. Intenta de nuevo.",
+    };
+  }
+}
+
+// Regreso del navegador desde Stripe: finaliza (o recupera) el registro y
+// abre la sesión. No depende de localStorage.
+export async function completeCardRegistration(checkoutSessionId: string) {
+  try {
+    const session = await stripe.checkout.sessions.retrieve(checkoutSessionId);
+    const result = await finalizeCardRegistration(session);
+    if (!result.ok) return { success: false, error: result.error };
+
+    const cookieStore = await cookies();
+    cookieStore.set("user_session", result.userId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: undefined,
+      path: "/",
+    });
+
+    revalidatePath("/dashboard");
+    return { success: true, userId: result.userId };
+  } catch (error) {
+    console.error("Error completando registro con tarjeta:", error);
+    return {
+      success: false,
+      error:
+        "No pudimos confirmar tu pago todavía. Recarga la página en unos momentos.",
     };
   }
 }

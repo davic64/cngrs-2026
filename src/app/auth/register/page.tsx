@@ -29,8 +29,9 @@ import {
   setRegistrationSession,
 } from "@/app/actions/auth";
 import {
+  completeCardRegistration,
   createCheckoutSession,
-  recordNewRegistrationPayment,
+  savePendingRegistration,
 } from "@/app/actions/stripe";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
@@ -549,93 +550,18 @@ export default function RegisterPage() {
   const completeStripeRegistration = async (sessionId: string) => {
     setIsCompletingRegistration(true);
 
-    const saved = loadRegText();
-    if (!saved) {
-      alert(
-        "No se encontraron los datos de registro. Por favor regístrate de nuevo.",
-      );
-      setIsCompletingRegistration(false);
-      setStep(1);
+    // El servidor tiene los datos (registro pendiente): no depende de localStorage.
+    const result = await completeCardRegistration(sessionId);
+
+    if (result.success) {
+      clearRegStorage();
+      router.push("/dashboard");
       return;
     }
 
-    try {
-      // 1. Crear usuario primero
-      const userData = new FormData();
-      userData.append("nombre", saved.nombre || "");
-      userData.append("apellido", saved.apellido || "");
-      userData.append("telefono", saved.telefono || "");
-      userData.append("password", saved.password || "");
-      userData.append("edad", saved.edad || "");
-      userData.append("genero", saved.genero || "");
-      userData.append("tallaPlayera", saved.tallaPlayera || "");
-      userData.append(
-        "pais",
-        saved.pais === "Otro" ? saved.otroPais || "" : saved.pais || "",
-      );
-      userData.append("estado", saved.estado || "");
-      userData.append("localidad", saved.localidad || "");
-      userData.append("alergias", saved.alergias || "");
-      userData.append("padecimiento", saved.padecimiento || "");
-      userData.append("medicamento", saved.medicamento || "");
-      userData.append("dosisFrecuencia", saved.dosisFrecuencia || "");
-      if (saved.contactoEmergencia) {
-        userData.append("contactoNombre", saved.contactoEmergencia.nombre);
-        userData.append("contactoTelefono", saved.contactoEmergencia.telefono);
-      }
-      userData.append("tipoPago", "tarjeta");
-      userData.append("metodoPago", "tarjeta");
-      // No incluir stripeSessionId aquí - solo registrar el usuario sin pago
-      userData.append("skipCookie", "true"); // No setear cookie aún
-      // URLs de archivos ya subidos
-      if (saved.profilePhotoUrl)
-        userData.append("profilePhotoUrl", saved.profilePhotoUrl);
-      if (saved.documentUrl) userData.append("documentUrl", saved.documentUrl);
-      if (saved.sessionId) userData.append("sessionId", saved.sessionId);
-
-      const userResult = await registerUser(userData);
-
-      if (!userResult.success || !userResult.userId) {
-        throw new Error(userResult.error || "No se pudo crear el usuario");
-      }
-
-      const userId = userResult.userId;
-      console.log(`✅ Usuario creado: ${userId}`);
-
-      // 2. Registrar el pago de Stripe
-      const paymentResult = await recordNewRegistrationPayment(
-        userId,
-        sessionId,
-        parseInt(saved.baseAmount || saved.registrationFeePrice || "500", 10),
-        saved.tipoPago === "completo" ? "completo" : "inscripcion",
-      );
-
-      if (!paymentResult.success) {
-        throw new Error(paymentResult.error || "No se pudo registrar el pago");
-      }
-
-      console.log(
-        `✅ Pago registrado. Status: ${paymentResult.registrationStatus}`,
-      );
-
-      // 3. Setear cookie de sesión
-      await setRegistrationSession(userId);
-
-      // 4. Limpiar datos locales
-      clearRegStorage();
-
-      // 5. Redirigir al dashboard
-      router.push("/dashboard");
-    } catch (error: any) {
-      console.error("Error en completeStripeRegistration:", error);
-      alert(
-        error.message ||
-          "Error al completar el registro. Por favor intenta de nuevo.",
-      );
-      setIsCompletingRegistration(false);
-      // Restaurar datos para reintentar
-      await restoreFromStorage();
-    }
+    alert(result.error);
+    setIsCompletingRegistration(false);
+    await restoreFromStorage();
   };
 
   // ── Navegación ──
@@ -659,6 +585,34 @@ export default function RegisterPage() {
     }
 
     setStep(nextStep);
+  };
+
+  const buildRegistrationData = () => {
+    const data = new FormData();
+    data.append("nombre", formData.nombre);
+    data.append("apellido", formData.apellido);
+    data.append("telefono", formData.telefono);
+    data.append("password", formData.password);
+    data.append("edad", formData.edad);
+    data.append("genero", formData.genero);
+    data.append("tallaPlayera", formData.tallaPlayera);
+    data.append(
+      "pais",
+      formData.pais === "Otro" ? formData.otroPais : formData.pais,
+    );
+    data.append("estado", formData.estado);
+    data.append("localidad", formData.localidad);
+    data.append("alergias", formData.alergias);
+    data.append("padecimiento", formData.padecimiento);
+    data.append("medicamento", formData.medicamento);
+    data.append("dosisFrecuencia", formData.dosisFrecuencia);
+    if (formData.contactoEmergencia) {
+      data.append("contactoNombre", formData.contactoEmergencia.nombre);
+      data.append("contactoTelefono", formData.contactoEmergencia.telefono);
+    }
+    data.append("tipoPago", formData.tipoPago || "");
+    data.append("metodoPago", formData.metodoPago || "");
+    return data;
   };
 
   const handleFinalAction = async () => {
@@ -705,7 +659,24 @@ export default function RegisterPage() {
         });
       }
 
-      // 2. Redirigir a Stripe
+      // 2. Guardar el registro en el servidor (valida teléfono y cupo antes de cobrar)
+      const uploaded = loadRegText() || {};
+      const pendingData = buildRegistrationData();
+      if (uploaded.profilePhotoUrl)
+        pendingData.append("profilePhotoUrl", uploaded.profilePhotoUrl);
+      if (uploaded.documentUrl)
+        pendingData.append("documentUrl", uploaded.documentUrl);
+      if (stripeSessionId) pendingData.append("sessionId", stripeSessionId);
+
+      const pending = await savePendingRegistration(pendingData);
+      if (!pending.success) {
+        alert(pending.error);
+        setIsProcessing(false);
+        return;
+      }
+      stripeSessionId = pending.id;
+
+      // 3. Redirigir a Stripe
       const result = await createCheckoutSession(
         null,
         formData.tipoPago as "completo" | "inscripcion",
@@ -778,30 +749,7 @@ export default function RegisterPage() {
         }
 
         // Registrar usuario
-        const data = new FormData();
-        data.append("nombre", formData.nombre);
-        data.append("apellido", formData.apellido);
-        data.append("telefono", formData.telefono);
-        data.append("password", formData.password);
-        data.append("edad", formData.edad);
-        data.append("genero", formData.genero);
-        data.append("tallaPlayera", formData.tallaPlayera);
-        data.append(
-          "pais",
-          formData.pais === "Otro" ? formData.otroPais : formData.pais,
-        );
-        data.append("estado", formData.estado);
-        data.append("localidad", formData.localidad);
-        data.append("alergias", formData.alergias);
-        data.append("padecimiento", formData.padecimiento);
-        data.append("medicamento", formData.medicamento);
-        data.append("dosisFrecuencia", formData.dosisFrecuencia);
-        if (formData.contactoEmergencia) {
-          data.append("contactoNombre", formData.contactoEmergencia.nombre);
-          data.append("contactoTelefono", formData.contactoEmergencia.telefono);
-        }
-        data.append("tipoPago", formData.tipoPago || "");
-        data.append("metodoPago", formData.metodoPago || "");
+        const data = buildRegistrationData();
 
         if (profileUrl) data.append("profilePhotoUrl", profileUrl);
         if (docUrl) data.append("documentUrl", docUrl);
@@ -825,59 +773,6 @@ export default function RegisterPage() {
         alert("Error al procesar tu registro. Por favor intenta de nuevo.");
         setIsProcessing(false);
       }
-    }
-  };
-
-  const handleSubmit = async (shouldChangeStep = true) => {
-    // setIsProcessing lo maneja el que lo llama
-
-    const data = new FormData();
-    data.append("nombre", formData.nombre);
-    data.append("apellido", formData.apellido);
-    data.append("telefono", formData.telefono);
-    data.append("password", formData.password);
-    data.append("edad", formData.edad);
-    data.append("genero", formData.genero);
-    data.append("tallaPlayera", formData.tallaPlayera);
-    data.append(
-      "pais",
-      formData.pais === "Otro" ? formData.otroPais : formData.pais,
-    );
-    data.append("estado", formData.estado);
-    data.append("localidad", formData.localidad);
-    data.append("alergias", formData.alergias);
-    data.append("padecimiento", formData.padecimiento);
-    data.append("medicamento", formData.medicamento);
-    data.append("dosisFrecuencia", formData.dosisFrecuencia);
-    if (formData.contactoEmergencia) {
-      data.append("contactoNombre", formData.contactoEmergencia.nombre);
-      data.append("contactoTelefono", formData.contactoEmergencia.telefono);
-    }
-    data.append("tipoPago", formData.tipoPago);
-    data.append("metodoPago", formData.metodoPago);
-    // Si es sesión restaurada O si ya se subieron archivos en el paso 7→8,
-    // usar URLs pre-subidas para evitar duplicar archivos en R2
-    const saved = loadRegText();
-    if (isRestoredSession || (saved?.sessionId && saved?.profilePhotoUrl)) {
-      if (saved?.profilePhotoUrl)
-        data.append("profilePhotoUrl", saved.profilePhotoUrl);
-      if (saved?.documentUrl) data.append("documentUrl", saved.documentUrl);
-      if (saved?.sessionId) data.append("sessionId", saved.sessionId);
-    } else {
-      if (formData.documento) data.append("documento", formData.documento);
-      if (formData.fotoPerfil) data.append("fotoPerfil", formData.fotoPerfil);
-    }
-    if (formData.comprobantePago)
-      data.append("comprobantePago", formData.comprobantePago);
-
-    const result = await registerUser(data);
-
-    if (result.success) {
-      if (shouldChangeStep) setStep(9);
-
-      return { success: true, userId: result.userId };
-    } else {
-      return { success: false, error: result.error };
     }
   };
 

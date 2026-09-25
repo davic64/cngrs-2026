@@ -1,8 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
-import { db } from "@/db";
-import { settings } from "@/db/schema";
+import { notifyAdmin } from "@/lib/telegram";
 
 export async function sendPasswordResetRequest(phone: string, message: string) {
   try {
@@ -27,10 +25,12 @@ export async function sendPasswordResetRequest(phone: string, message: string) {
       };
     }
 
-    // Get Telegram config
-    const config = await db.query.settings.findFirst();
+    // Format and send Telegram notification
+    const notification = `🔐 *SOLICITUD DE CAMBIO DE CONTRASEÑA*\n\n📱 *Teléfono:* ${phone}\n\n💬 *Mensaje:*\n${message}\n\n---\n⏰ *Fecha:* ${new Date().toLocaleString("es-MX")}`;
 
-    if (!config?.telegramToken || !config?.telegramChatId) {
+    const result = await notifyAdmin(notification);
+
+    if (result === "unconfigured") {
       return {
         success: false,
         error:
@@ -38,15 +38,7 @@ export async function sendPasswordResetRequest(phone: string, message: string) {
       };
     }
 
-    // Format and send Telegram notification
-    const notification = `🔐 *SOLICITUD DE CAMBIO DE CONTRASEÑA*\n\n📱 *Teléfono:* ${phone}\n\n💬 *Mensaje:*\n${message}\n\n---\n⏰ *Fecha:* ${new Date().toLocaleString("es-MX")}`;
-
-    const url = `https://api.telegram.org/bot${config.telegramToken}/sendMessage?chat_id=${config.telegramChatId}&text=${encodeURIComponent(notification)}&parse_mode=Markdown`;
-
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      console.error("Telegram API error:", await response.text());
+    if (result === "error") {
       return {
         success: false,
         error: "Error al enviar la solicitud. Por favor intenta más tarde.",

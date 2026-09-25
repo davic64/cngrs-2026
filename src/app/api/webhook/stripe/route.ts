@@ -4,6 +4,7 @@ import Stripe from "stripe";
 import { db } from "@/db";
 import { users, payments } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { finalizeCardRegistration } from "@/lib/registration";
 import { confirmTemporaryFiles } from "@/lib/storage";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -86,25 +87,28 @@ export async function POST(req: Request) {
           `✅ Payment processed for user ${userId}. Total: ${totalPaid}/${requiredAmount}. New status: ${newStatus}`,
         );
       } else {
-        // Si es un nuevo usuario en registro (registration_pending)
-        console.log(
-          `Processing payment for new registration. Will be handled by client.`,
-        );
-        // El cliente se encargará de completar el registro con recordNewRegistrationPayment
-        // El webhook solo confirma los archivos temporales aquí
-        const sessionId = session.metadata?.sessionId;
-        if (sessionId) {
-          await confirmTemporaryFiles(sessionId);
-          console.log(
-            `✅ Temporary files confirmed for new registration session: ${sessionId}`,
-          );
+        // Nuevo registro: crear usuario + pago desde el registro pendiente.
+        // Si el navegador ya lo hizo, esto sólo confirma (idempotente).
+        const result = await finalizeCardRegistration(session);
+        if (!result.ok && result.retryable) {
+          // Error transitorio: Stripe reintentará el webhook
+          return new NextResponse(result.error, { status: 500 });
         }
+        console.log(
+          result.ok
+            ? `✅ Registro con tarjeta finalizado: ${result.userId}`
+            : `⚠️ Registro con tarjeta no finalizado: ${result.error}`,
+        );
       }
     } catch (error: any) {
       console.error(
         `Error processing webhook for user ${userId}:`,
         error.message,
       );
+      // Un registro nuevo pagado no debe perderse: que Stripe reintente
+      if (userId === "registration_pending") {
+        return new NextResponse("Registration error", { status: 500 });
+      }
       // No retornar error al webhook para evitar reintentos infinitos
       // El error será loggeado pero el webhook responderá 200
     }

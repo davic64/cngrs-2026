@@ -4,8 +4,16 @@ import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
+import { after } from "next/server";
 import { db } from "@/db";
-import { emergencyContacts, healthInfo, payments, users } from "@/db/schema";
+import { payments, users } from "@/db/schema";
+import {
+  checkCapacity,
+  createRegistration,
+  pgCode,
+  validateRegistration,
+} from "@/lib/registration";
+import { notifyAdmin } from "@/lib/telegram";
 import {
   uploadFile,
   uploadTemporaryFile,
@@ -14,7 +22,6 @@ import {
   checkCartaResponsivaExists,
   getCartaResponsivaUrl,
 } from "@/lib/storage";
-import { getAdultCompanionCount } from "@/app/actions/ocr";
 
 export async function loginUser(formData: FormData) {
   try {
@@ -57,204 +64,110 @@ export async function loginUser(formData: FormData) {
   }
 }
 
+// Registro con transferencia/efectivo (el de tarjeta pasa por
+// savePendingRegistration + finalizeCardRegistration en stripe.ts).
 export async function registerUser(formData: FormData) {
+  const validation = validateRegistration(formData);
+  if (!validation.ok) return { success: false, error: validation.error };
+  const data = validation.data;
+
+  if (data.paymentMethod === "tarjeta") {
+    return {
+      success: false,
+      error: "Para pagar con tarjeta usa el botón de pago con tarjeta.",
+    };
+  }
+
+  const paymentProof = formData.get("comprobantePago") as File | null;
+  if (!paymentProof || paymentProof.size === 0) {
+    return { success: false, error: "Sube una foto del comprobante de pago." };
+  }
+
+  let stage: "subida_archivos" | "guardado" = "subida_archivos";
   try {
-    const firstName = formData.get("nombre") as string;
-    const lastName = formData.get("apellido") as string;
-    const phone = formData.get("telefono") as string;
-    const password = formData.get("password") as string;
-    const age = parseInt(formData.get("edad") as string, 10);
-
-    if (age > 29) {
-      const adultCount = await getAdultCompanionCount();
-      if (adultCount >= 50) {
-        return {
-          success: false,
-          error: "Lo sentimos, el cupo de adultos acompañantes está lleno.",
-        };
-      }
-    } else {
-      const { getRegularRegistrationCount } = await import("@/app/actions/ocr");
-      const regularCount = await getRegularRegistrationCount();
-      if (regularCount >= 500) {
-        return {
-          success: false,
-          error: "Lo sentimos, el cupo de asistentes generales está lleno.",
-        };
-      }
-    }
-
-    const gender = formData.get("genero") as "M" | "F" | "Otro";
-    const shirtSize = formData.get("tallaPlayera") as string;
-
-    const country = formData.get("pais") as string;
-    const state = formData.get("estado") as string;
-    const locality = formData.get("localidad") as string;
-
-    const allergies = formData.get("alergias") as string;
-    const conditions = formData.get("padecimiento") as string;
-    const medications = formData.get("medicamento") as string;
-    const dosageFrequency = formData.get("dosisFrecuencia") as string;
-
-    const contactName = formData.get("contactoNombre") as string;
-    const contactPhone = formData.get("contactoTelefono") as string;
+    const capacityError = await checkCapacity(data.age);
+    if (capacityError) return { success: false, error: capacityError };
 
     // --- ARCHIVOS: URLs PRE-SUBIDAS O SUBIDAS DIRECTAS ---
-    const profilePhotoUrl = formData.get("profilePhotoUrl") as string;
-    const documentUrl = formData.get("documentUrl") as string;
-    const paymentProof = formData.get("comprobantePago") as File;
+    let profileUrl = (formData.get("profilePhotoUrl") as string) || "";
+    let docUrl = (formData.get("documentUrl") as string) || "";
     const sessionId = formData.get("sessionId") as string | null;
 
-    let profileUrl = profilePhotoUrl || "";
-    let docUrl = documentUrl || "";
-    let proofUrl = "";
-
-    // Si no hay URLs pre-subidas, subir archivos directamente
-    // (para compatibilidad con pagos transfer/efectivo)
-    if (!profilePhotoUrl) {
-      const profilePhoto = formData.get("fotoPerfil") as File;
+    if (!profileUrl) {
+      const profilePhoto = formData.get("fotoPerfil") as File | null;
       if (profilePhoto && profilePhoto.size > 0) {
         profileUrl = await uploadFile(profilePhoto, "Perfil");
       }
     }
 
-    if (!documentUrl) {
-      const document = formData.get("documento") as File;
+    if (!docUrl) {
+      const document = formData.get("documento") as File | null;
       if (document && document.size > 0) {
         const folderName =
-          age >= 15 && age <= 17 ? "Carta Responsiva" : "Identificacion";
+          data.age >= 15 && data.age <= 17
+            ? "Carta Responsiva"
+            : "Identificacion";
         docUrl = await uploadFile(document, folderName);
       }
     }
 
-    if (paymentProof && paymentProof.size > 0) {
-      proofUrl = await uploadFile(paymentProof, "Pagos");
-    }
+    const proofUrl = await uploadFile(paymentProof, "Pagos");
 
-    const tipoPago = formData.get("tipoPago") as string;
-    const metodoPago = formData.get("metodoPago") as
-      | "tarjeta"
-      | "transferencia"
-      | "efectivo";
-    const stripeSessionId = formData.get("stripeSessionId") as string | null;
-    const skipCookie = formData.get("skipCookie") === "true";
+    stage = "guardado";
+    const config = await db.query.settings.findFirst();
+    const amount =
+      data.paymentType === "completo"
+        ? config?.fullPaymentPrice || 1500
+        : config?.registrationFeePrice || 500;
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const userId = await createRegistration({
+      data,
+      passwordHash: await bcrypt.hash(data.password, 10),
+      profilePhotoUrl: profileUrl,
+      documentUrl: docUrl,
+      payment: { amount, status: "revision", proofUrl },
+    });
 
-    let newUser;
-    try {
-      const [user] = await db
-        .insert(users)
-        .values({
-          firstName,
-          lastName,
-          phone,
-          password: hashedPassword,
-          age,
-          gender,
-          shirtSize,
-          country,
-          state,
-          locality,
-          registrationStatus: "pendiente",
-          profilePhotoUrl: profileUrl,
-          documentUrl: docUrl,
-        })
-        .returning();
+    if (sessionId) await confirmTemporaryFiles(sessionId);
 
-      newUser = user;
-
-      await db.insert(emergencyContacts).values({
-        userId: user.id,
-        name: contactName,
-        phone: contactPhone,
-      });
-
-      await db.insert(healthInfo).values({
-        userId: user.id,
-        allergies,
-        conditions,
-        medications,
-        dosageFrequency,
-      });
-
-      // Registrar pago inicial
-      if (metodoPago === "tarjeta" && stripeSessionId) {
-        // Pago exitoso con Stripe durante el registro
-        const config = await db.query.settings.findFirst();
-        const amount =
-          tipoPago === "completo"
-            ? config?.fullPaymentPrice || 1500
-            : config?.registrationFeePrice || 500;
-
-        await db.insert(payments).values({
-          userId: user.id,
-          amount,
-          type: tipoPago,
-          method: "tarjeta",
-          status: "completado",
-        });
-
-        // Actualizar estatus a parcial o completado según el monto
-        await db
-          .update(users)
-          .set({
-            registrationStatus:
-              tipoPago === "completo" ? "completado" : "parcial",
-          })
-          .where(eq(users.id, user.id));
-      } else if (metodoPago !== "tarjeta" && proofUrl) {
-        // Pago por transferencia/efectivo (requiere revisión)
-        const config = await db.query.settings.findFirst();
-        const amount =
-          tipoPago === "completo"
-            ? config?.fullPaymentPrice || 1500
-            : config?.registrationFeePrice || 500;
-
-        await db.insert(payments).values({
-          userId: user.id,
-          amount,
-          type: tipoPago,
-          method: metodoPago,
-          status: "revision",
-          proofUrl: proofUrl,
-        });
-
-        // Confirmar archivos temporales si pago no es tarjeta (transfer/efectivo)
-        if (sessionId) {
-          await confirmTemporaryFiles(sessionId);
-        }
-      }
-    } catch (dbError) {
-      if (newUser) {
-        await db.delete(users).where(eq(users.id, newUser.id));
-      }
-      throw dbError;
-    }
-
-    // Para tarjeta: no settear cookie (se hace después de verificar pago)
-    if (!skipCookie) {
-      const cookieStore = await cookies();
-      cookieStore.set("user_session", newUser.id, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 60 * 60 * 24 * 7,
-        path: "/",
-      });
-    }
+    const cookieStore = await cookies();
+    cookieStore.set("user_session", userId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 7,
+      path: "/",
+    });
 
     revalidatePath("/admin/users");
-    return { success: true, userId: newUser.id };
+    return { success: true, userId };
   } catch (error: any) {
-    console.error("Error en registro:", error);
-    if (error.code === "23505") {
+    const code = pgCode(error);
+    console.error(
+      `Error en registro [etapa=${stage} code=${code ?? "-"}] tel=${data.phone}:`,
+      error,
+    );
+
+    if (code === "23505") {
       return {
         success: false,
         error: "El número telefónico ya está registrado",
       };
     }
-    return { success: false, error: "Error interno al procesar el registro" };
+
+    after(() =>
+      notifyAdmin(
+        `⚠️ *REGISTRO FALLIDO*\n\n👤 ${data.firstName} ${data.lastName}\n📱 ${data.phone}\n💳 ${data.paymentMethod} (${data.paymentType})\n🧩 Etapa: ${stage}\n❌ ${code ?? ""} ${error?.message ?? error}`,
+      ),
+    );
+
+    return {
+      success: false,
+      error:
+        stage === "subida_archivos"
+          ? "No se pudo subir tu comprobante o tus archivos. Revisa tu conexión e intenta de nuevo."
+          : "No se pudo guardar tu registro. Intenta de nuevo; si el problema sigue, escríbenos por el chat de soporte.",
+    };
   }
 }
 

@@ -2,6 +2,7 @@ import { relations } from "drizzle-orm";
 import {
   boolean,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   serial,
@@ -237,6 +238,19 @@ export const temporaryFilesRelations = relations(
     // No direct relation needed - files are tracked by sessionId
   }),
 );
+
+// Registros con tarjeta guardados antes de ir a Stripe. El webhook los finaliza
+// aunque el navegador nunca regrese. id = sessionId "reg_..." de la metadata.
+export const pendingRegistrations = pgTable("pending_registrations", {
+  id: text("id").primaryKey(),
+  data: jsonb("data").notNull(),
+  passwordHash: text("password_hash").notNull(),
+  paymentType: text("payment_type").notNull(), // "completo" | "inscripcion"
+  status: text("status").default("pending").notNull(), // pending | completed | failed
+  userId: uuid("user_id"),
+  error: text("error"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
 
 // Nota: La plantilla de Carta Responsiva se guarda directamente en R2
 // en la ruta fija: templates/carta-responsiva.pdf
