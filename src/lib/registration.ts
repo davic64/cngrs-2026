@@ -9,6 +9,7 @@ import {
   pendingRegistrations,
   users,
 } from "@/db/schema";
+import { ADULT_COMPANION_LIMIT, REGULAR_LIMIT } from "@/lib/capacity";
 import { confirmTemporaryFiles } from "@/lib/storage";
 import { notifyAdmin } from "@/lib/telegram";
 import {
@@ -105,10 +106,10 @@ export function validateRegistration(
 // Devuelve el mensaje de cupo lleno, o null si hay lugar.
 export async function checkCapacity(age: number): Promise<string | null> {
   if (age > 29) {
-    if ((await getAdultCompanionCount()) >= 50) {
+    if ((await getAdultCompanionCount()) >= ADULT_COMPANION_LIMIT) {
       return "Lo sentimos, el cupo de adultos acompañantes está lleno.";
     }
-  } else if ((await getRegularRegistrationCount()) >= 500) {
+  } else if ((await getRegularRegistrationCount()) >= REGULAR_LIMIT) {
     return "Lo sentimos, el cupo de asistentes generales está lleno.";
   }
   return null;

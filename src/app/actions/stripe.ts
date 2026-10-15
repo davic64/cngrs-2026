@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import Stripe from "stripe";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
+import { ADULT_COMPANION_LIMIT, REGULAR_LIMIT } from "@/lib/capacity";
 import { payments, pendingRegistrations, users } from "@/db/schema";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
@@ -39,13 +40,13 @@ export async function createCheckoutSession(
       if (age > 29) {
         const { getAdultCompanionCount } = await import("@/app/actions/ocr");
         const adultCount = await getAdultCompanionCount();
-        if (adultCount >= 50) {
+        if (adultCount >= ADULT_COMPANION_LIMIT) {
           throw new Error("Lo sentimos, el cupo de adultos acompañantes está lleno.");
         }
       } else {
         const { getRegularRegistrationCount } = await import("@/app/actions/ocr");
         const regularCount = await getRegularRegistrationCount();
-        if (regularCount >= 500) {
+        if (regularCount >= REGULAR_LIMIT) {
           throw new Error("Lo sentimos, el cupo de asistentes generales está lleno.");
         }
       }

@@ -22,6 +22,13 @@
       "when": 1790295490514,
       "tag": "0002_fair_blonde_phantom",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792045837859,
+      "tag": "0003_nervous_stryfe",
+      "breakpoints": true
     }
   ]
 }

@@ -255,3 +255,16 @@ export const pendingRegistrations = pgTable("pending_registrations", {
 // Nota: La plantilla de Carta Responsiva se guarda directamente en R2
 // en la ruta fija: templates/carta-responsiva.pdf
 // No necesita tabla en la base de datos.
+
+// Bitácora de ediciones del admin sobre asistentes y pagos.
+// Sin FK a users: la bitácora debe sobrevivir al borrado del asistente.
+export const adminAuditLog = pgTable("admin_audit_log", {
+  id: serial("id").primaryKey(),
+  adminId: uuid("admin_id").notNull(),
+  userId: uuid("user_id").notNull(),
+  entity: text("entity").notNull(), // "user" | "payment"
+  entityId: text("entity_id").notNull(),
+  action: text("action").notNull(), // "update" | "create" | "delete"
+  changes: jsonb("changes").notNull(), // { campo: { from, to } } o snapshot
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
