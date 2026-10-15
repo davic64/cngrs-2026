@@ -5,24 +5,25 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Clock,
-  CreditCard,
   Download,
   ExternalLink,
   Eye,
   FileText,
   Lock,
+  Pencil,
   Trash2,
   Upload,
 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
 import {
   deleteUser,
-  updateUserDetails,
-  updateUserDocument,
   generateTemporaryPassword,
+  updateUserDocument,
 } from "@/app/actions/admin";
+import { AttendeePaymentsSection } from "@/components/admin/users/AttendeePaymentsSection";
+import { EditAttendeeModal } from "@/components/admin/users/EditAttendeeModal";
+import type { Localities } from "@/components/auth/register/types";
 import { DashboardCard } from "@/components/dashboard/DashboardCard";
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
@@ -34,15 +35,24 @@ import {
   ModalHeader,
   ModalTitle,
 } from "@/components/ui/Modal";
+import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/utils";
 
 interface AdminUsersClientProps {
   initialUsers: any[];
+  localities: Localities;
 }
 
-export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
+export function AdminUsersClient({
+  initialUsers,
+  localities,
+}: AdminUsersClientProps) {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = React.useState("");
-  const [selectedUser, setSelectedUser] = React.useState<any>(null);
+  // Se guarda el id (no una copia) para que el expediente se refresque tras router.refresh()
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const selectedUser = initialUsers.find((u) => u.id === selectedId) ?? null;
+  const [showEditModal, setShowEditModal] = React.useState(false);
   const [isUploading, setIsUploading] = React.useState(false);
   const [showPasswordResetModal, setShowPasswordResetModal] =
     React.useState(false);
@@ -51,6 +61,13 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
   const [tempPassword, setTempPassword] = React.useState("");
 
   const searchParams = useSearchParams();
+  // ?status=parcial (desde el dashboard) abre la lista ya filtrada
+  const [statusFilter, setStatusFilter] = React.useState(() => {
+    const status = searchParams.get("status") ?? "";
+    return ["pendiente", "parcial", "completado"].includes(status)
+      ? status
+      : "";
+  });
   const PAGE_SIZE = 20;
   const [page, setPage] = React.useState(1);
 
@@ -59,15 +76,16 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
     const id = searchParams.get("user");
     if (id) {
       const u = initialUsers.find((x) => x.id === id);
-      if (u) setSelectedUser(u);
+      if (u) setSelectedId(u.id);
     }
   }, [searchParams, initialUsers]);
 
   const filteredUsers = initialUsers.filter(
     (u) =>
-      u.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.phone.includes(searchTerm),
+      (!statusFilter || u.registrationStatus === statusFilter) &&
+      (u.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.phone.includes(searchTerm)),
   );
 
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
@@ -212,15 +230,9 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
   const handleDelete = async (id: string) => {
     if (!confirm("¿Seguro que quieres eliminar a este asistente?")) return;
     await deleteUser(id);
-    setSelectedUser(null);
+    setSelectedId(null);
+    router.refresh();
     alert("Usuario eliminado");
-  };
-
-  const handleUpdateStatus = async (status: string) => {
-    if (!selectedUser) return;
-    await updateUserDetails(selectedUser.id, { registrationStatus: status });
-    setSelectedUser({ ...selectedUser, registrationStatus: status });
-    alert("Estado actualizado");
   };
 
   const handleUploadResponsiva = async (
@@ -236,7 +248,7 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
     const result = await updateUserDocument(selectedUser.id, formData);
     if (result.success) {
       alert("Carta responsiva subida con éxito.");
-      setSelectedUser({ ...selectedUser, documentUrl: result.url });
+      router.refresh();
     } else {
       alert("Error al subir el archivo.");
     }
@@ -290,7 +302,7 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
       </header>
 
       <DashboardCard>
-        <div className="mb-8">
+        <div className="mb-8 flex flex-col sm:flex-row gap-4 sm:items-end">
           <Input
             placeholder="Buscar por nombre o teléfono..."
             value={searchTerm}
@@ -300,6 +312,21 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
             }}
             className="max-w-md"
           />
+          <div className="sm:w-56">
+            <Select
+              options={[
+                { value: "", label: "Todos los estatus" },
+                { value: "pendiente", label: "Pendiente" },
+                { value: "parcial", label: "Parcial" },
+                { value: "completado", label: "Completado" },
+              ]}
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -358,7 +385,7 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setSelectedUser(user)}
+                      onClick={() => setSelectedId(user.id)}
                     >
                       <Eye size={18} />
                     </Button>
@@ -415,10 +442,20 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
         </div>
       </DashboardCard>
 
+      {selectedUser && (
+        <EditAttendeeModal
+          user={selectedUser}
+          localities={localities}
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          onSaved={() => router.refresh()}
+        />
+      )}
+
       {/* USER DETAILS DRAWER */}
       <Drawer
         isOpen={!!selectedUser}
-        onClose={() => setSelectedUser(null)}
+        onClose={() => setSelectedId(null)}
         title={
           <span className="uppercase tracking-tighter">
             Expediente <span className="text-primary">Digital</span>
@@ -427,6 +464,13 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
         footer={
           selectedUser && (
             <div className="flex flex-col gap-3">
+              <Button
+                variant="outline"
+                className="w-full rounded-2xl h-12 font-black uppercase text-[10px] tracking-widest transition-all"
+                onClick={() => setShowEditModal(true)}
+              >
+                <Pencil size={16} className="mr-2" /> Editar Datos
+              </Button>
               <div className="flex gap-3 w-full">
                 <Button
                   variant="outline"
@@ -444,7 +488,7 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
                 </Button>
                 <Button
                   className="flex-[2] rounded-2xl h-12 font-black uppercase text-[10px] tracking-widest shadow-lg shadow-primary/20"
-                  onClick={() => setSelectedUser(null)}
+                  onClick={() => setSelectedId(null)}
                 >
                   Cerrar Expediente
                 </Button>
@@ -565,134 +609,11 @@ export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
               </div>
             </div>
 
-            {/* Payments Section */}
-            <div className="space-y-4">
-              <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.2em] ml-2">
-                Historial de Pagos
-              </h4>
-              <div className="space-y-3">
-                {selectedUser.payments?.length > 0 ? (
-                  [...selectedUser.payments]
-                    .sort(
-                      (a: any, b: any) =>
-                        new Date(b.createdAt).getTime() -
-                        new Date(a.createdAt).getTime(),
-                    )
-                    .map((payment: any) => {
-                      const statusConfig: Record<
-                        string,
-                        {
-                          label: string;
-                          textColor: string;
-                          bgColor: string;
-                          icon: React.ReactNode;
-                        }
-                      > = {
-                        completado: {
-                          label: "Aprobado",
-                          textColor: "text-green-600",
-                          bgColor: "bg-green-50",
-                          icon: <CheckCircle2 size={16} />,
-                        },
-                        revision: {
-                          label: "En Revisión",
-                          textColor: "text-amber-600",
-                          bgColor: "bg-amber-50",
-                          icon: <Clock size={16} />,
-                        },
-                        pendiente: {
-                          label: "Pendiente",
-                          textColor: "text-gray-400",
-                          bgColor: "bg-gray-100",
-                          icon: <Clock size={16} />,
-                        },
-                        rechazado: {
-                          label: "Rechazado",
-                          textColor: "text-red-500",
-                          bgColor: "bg-red-50",
-                          icon: <AlertCircle size={16} />,
-                        },
-                      };
-                      const typeLabel: Record<string, string> = {
-                        completo: "Pago Completo",
-                        inscripcion: "Inscripción",
-                      };
-                      const methodLabel: Record<string, string> = {
-                        tarjeta: "Tarjeta",
-                        transferencia: "Transferencia",
-                        efectivo: "Efectivo",
-                      };
-                      const status =
-                        statusConfig[payment.status] ?? statusConfig.pendiente;
-                      return (
-                        <div
-                          key={payment.id}
-                          className="bg-white border border-gray-100 rounded-[2rem] p-5 shadow-sm flex items-center justify-between gap-4"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div
-                              className={cn(
-                                "h-10 w-10 rounded-2xl flex items-center justify-center shrink-0",
-                                status.bgColor,
-                                status.textColor,
-                              )}
-                            >
-                              <CreditCard size={18} />
-                            </div>
-                            <div>
-                              <p className="text-sm font-black text-secondary uppercase tracking-tight">
-                                ${payment.amount.toLocaleString("es-MX")} MXN
-                              </p>
-                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                {typeLabel[payment.type] ?? payment.type} •{" "}
-                                {methodLabel[payment.method] ?? payment.method}
-                              </p>
-                              <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-0.5">
-                                {new Date(payment.createdAt).toLocaleDateString(
-                                  "es-MX",
-                                  {
-                                    day: "2-digit",
-                                    month: "short",
-                                    year: "numeric",
-                                  },
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span
-                              className={cn(
-                                "text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-xl",
-                                status.bgColor,
-                                status.textColor,
-                              )}
-                            >
-                              {status.label}
-                            </span>
-                            {payment.proofUrl &&
-                              payment.status !== "rechazado" && (
-                              <a
-                                href={payment.proofUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="h-8 w-8 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-400 hover:text-primary hover:border-primary/20 transition-all"
-                              >
-                                <ExternalLink size={13} />
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })
-                ) : (
-                  <div className="bg-white border border-gray-100 rounded-[2rem] p-6 text-center">
-                    <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">
-                      Sin pagos registrados
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
+            <AttendeePaymentsSection
+              userId={selectedUser.id}
+              payments={selectedUser.payments ?? []}
+              onChanged={() => router.refresh()}
+            />
 
             {/* Documents Section */}
             <div className="space-y-4 pb-4">
