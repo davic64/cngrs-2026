@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
 import {
-  getAdminStats,
   getCartaResponsivaTemplate,
   getLocalities,
   getPendingPayments,
   getRejectedPayments,
   getSettings,
 } from "@/app/actions/admin";
+import { getAdminStats } from "@/app/actions/admin-stats";
 import { getSessionUser } from "@/app/actions/auth";
 import { AdminDashboardClient } from "@/components/admin/AdminDashboardClient";
 
