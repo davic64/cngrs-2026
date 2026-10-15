@@ -14,6 +14,11 @@ import {
 } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
+import { requireAdmin } from "@/lib/admin-auth";
+import {
+  getRequiredAmount,
+  recomputeStatusStatement,
+} from "@/lib/registration-status";
 import {
   agendaDays,
   events,
@@ -43,6 +48,7 @@ export async function createLocality(data: {
   state: string;
   country: string;
 }) {
+  await requireAdmin();
   const name = data.name.trim();
   const state = data.state.trim();
   const country = data.country.trim();
@@ -75,6 +81,7 @@ export async function createLocality(data: {
 }
 
 export async function deleteLocality(id: number) {
+  await requireAdmin();
   await db.delete(localities).where(eq(localities.id, id));
   revalidatePath("/admin/dashboard");
   revalidatePath("/admin/localities");
@@ -86,6 +93,7 @@ export async function updateLocality(
   id: number,
   data: { name: string; state: string; country: string },
 ) {
+  await requireAdmin();
   await db.update(localities).set(data).where(eq(localities.id, id));
   revalidatePath("/admin/dashboard");
   revalidatePath("/admin/localities");
@@ -101,7 +109,10 @@ export async function getSettings() {
       const [newConfig] = await db.insert(settings).values({}).returning();
       config = newConfig;
     }
-    return config;
+    // Pública (registro y panel del asistente): sin credenciales de Telegram.
+    const { telegramToken: _token, telegramChatId: _chat, ...publicConfig } =
+      config;
+    return publicConfig;
   } catch (error) {
     console.error("Error al obtener settings:", error);
     return {
@@ -130,6 +141,7 @@ export async function updateSettings(data: {
   bankHolder?: string;
   oxxoCardNumber?: string;
 }) {
+  await requireAdmin();
   await db.update(settings).set({ ...data, updatedAt: new Date() });
   revalidatePath("/admin/dashboard");
   revalidatePath("/auth/register");
@@ -155,6 +167,7 @@ export async function getVenue() {
 }
 
 export async function updateVenue(data: any) {
+  await requireAdmin();
   const current = await getVenue();
   await db.update(venues).set(data).where(eq(venues.id, current.id));
   revalidatePath("/admin/dashboard");
@@ -164,6 +177,7 @@ export async function updateVenue(data: any) {
 
 // --- GESTIÓN DE USUARIOS (ASISTENTES) ---
 export async function getUsers() {
+  await requireAdmin();
   return await db.query.users.findMany({
     where: eq(users.role, "user"),
     with: {
@@ -175,13 +189,8 @@ export async function getUsers() {
   });
 }
 
-export async function updateUserDetails(userId: string, data: any) {
-  await db.update(users).set(data).where(eq(users.id, userId));
-  revalidatePath("/admin/users");
-  return { success: true };
-}
-
 export async function deleteUser(userId: string) {
+  await requireAdmin();
   try {
     // 1. Obtener al usuario y sus pagos para tener las URLs de los archivos
     const user = await db.query.users.findFirst({
@@ -223,6 +232,7 @@ export async function deleteUser(userId: string) {
 
 // --- GESTIÓN DE ADMINISTRADORES ---
 export async function getAdmins() {
+  await requireAdmin();
   return await db.query.users.findMany({
     where: eq(users.role, "admin"),
     orderBy: [desc(users.createdAt)],
@@ -230,6 +240,7 @@ export async function getAdmins() {
 }
 
 export async function createAdmin(data: any) {
+  await requireAdmin();
   try {
     const hashedPassword = await bcrypt.hash(data.password, 10);
     await db.insert(users).values({
@@ -255,6 +266,7 @@ export async function createAdmin(data: any) {
 }
 
 export async function updateAdmin(userId: string, data: any) {
+  await requireAdmin();
   try {
     if (data.password) {
       data.password = await bcrypt.hash(data.password, 10);
@@ -270,6 +282,7 @@ export async function updateAdmin(userId: string, data: any) {
 }
 
 export async function deleteAdmin(userId: string) {
+  await requireAdmin();
   try {
     await db.delete(users).where(eq(users.id, userId));
     revalidatePath("/admin/dashboard");
@@ -280,6 +293,7 @@ export async function deleteAdmin(userId: string) {
 }
 
 export async function updateUserDocument(userId: string, formData: FormData) {
+  await requireAdmin();
   try {
     const file = formData.get("documento") as File;
     if (!file) return { success: false, error: "No file provided" };
@@ -299,52 +313,9 @@ export async function updateUserDocument(userId: string, formData: FormData) {
   }
 }
 
-// --- GESTIÓN DE DASHBOARD / MÉTRICAS ---
-export async function getAdminStats() {
-  try {
-    const [totalUsers] = await db
-      .select({ value: count() })
-      .from(users)
-      .where(eq(users.role, "user"));
-
-    // Asistentes distintos con al menos un pago validado (no filas de pago)
-    const [validatedPayments] = await db
-      .select({ value: countDistinct(payments.userId) })
-      .from(payments)
-      .innerJoin(users, eq(payments.userId, users.id))
-      .where(and(eq(payments.status, "completado"), eq(users.role, "user")));
-
-    const [pendingPayments] = await db
-      .select({ value: count() })
-      .from(payments)
-      .innerJoin(users, eq(payments.userId, users.id))
-      .where(and(eq(payments.status, "revision"), eq(users.role, "user")));
-
-    const [totalIncome] = await db
-      .select({ value: sum(payments.amount) })
-      .from(payments)
-      .innerJoin(users, eq(payments.userId, users.id))
-      .where(and(eq(payments.status, "completado"), eq(users.role, "user")));
-
-    return {
-      totalUsers: totalUsers.value,
-      validatedPayments: validatedPayments.value,
-      pendingPayments: pendingPayments.value,
-      totalIncome: totalIncome.value || 0,
-    };
-  } catch (error) {
-    console.error("Error al obtener estadísticas:", error);
-    return {
-      totalUsers: 0,
-      validatedPayments: 0,
-      pendingPayments: 0,
-      totalIncome: 0,
-    };
-  }
-}
-
 // --- GESTIÓN DE PAGOS ---
 export async function getPendingPayments() {
+  await requireAdmin();
   return await db.query.payments.findMany({
     where: eq(payments.status, "revision"),
     with: {
@@ -355,6 +326,7 @@ export async function getPendingPayments() {
 }
 
 export async function getRejectedPayments() {
+  await requireAdmin();
   // Usuarios que ya tienen al menos un pago validado (no hay que contactarlos)
   const paid = await db
     .selectDistinct({ id: payments.userId })
@@ -379,88 +351,36 @@ export async function validatePayment(
   status: "completado" | "rechazado",
   rejectionReason?: string,
 ) {
+  await requireAdmin();
   try {
-    const [updatedPayment] = await db
-      .update(payments)
-      .set({ status })
-      .where(eq(payments.id, paymentId))
-      .returning();
+    const current = await db.query.payments.findFirst({
+      where: eq(payments.id, paymentId),
+    });
+    if (!current) return { success: false };
 
-    if (status === "rechazado") {
-      // 1. Actualizar con razón de rechazo
-      if (rejectionReason) {
-        await db
-          .update(payments)
-          .set({ rejectionReason })
-          .where(eq(payments.id, paymentId));
-      }
+    // Pago + recálculo del estatus del asistente en una sola transacción
+    const required = await getRequiredAmount();
+    const [[updatedPayment]] = await db.batch([
+      db
+        .update(payments)
+        .set({
+          status,
+          ...(status === "rechazado" && rejectionReason
+            ? { rejectionReason }
+            : {}),
+        })
+        .where(eq(payments.id, paymentId))
+        .returning(),
+      recomputeStatusStatement(current.userId, required),
+    ]);
 
-      // 2. Eliminar el comprobante de R2 si existe
-      if (updatedPayment.proofUrl) {
-        try {
-          await deleteFile(updatedPayment.proofUrl);
-        } catch (error) {
-          console.error("Error al eliminar comprobante:", error);
-          // No fallar si no se puede eliminar el archivo
-        }
-      }
-
-      // 3. Recalcular el estatus de registro del usuario
-      const userPayments = await db
-        .select({ amount: payments.amount })
-        .from(payments)
-        .where(
-          and(
-            eq(payments.userId, updatedPayment.userId),
-            eq(payments.status, "completado"),
-          ),
-        );
-
-      const totalPaid = userPayments.reduce((acc, p) => acc + p.amount, 0);
-      const config = await db.query.settings.findFirst();
-      const requiredAmount = config?.fullPaymentPrice || 1500;
-
-      // Si después del rechazo no tiene suficientes pagos, volver a "pendiente"
-      if (totalPaid === 0) {
-        await db
-          .update(users)
-          .set({ registrationStatus: "pendiente" })
-          .where(eq(users.id, updatedPayment.userId));
-      } else if (totalPaid < requiredAmount) {
-        await db
-          .update(users)
-          .set({ registrationStatus: "parcial" })
-          .where(eq(users.id, updatedPayment.userId));
-      }
-    } else if (status === "completado") {
-      // 1. Obtener todos los pagos completados del usuario
-      const userPayments = await db
-        .select({ amount: payments.amount })
-        .from(payments)
-        .where(
-          and(
-            eq(payments.userId, updatedPayment.userId),
-            eq(payments.status, "completado"),
-          ),
-        );
-
-      const totalPaid = userPayments.reduce((acc, p) => acc + p.amount, 0);
-
-      // 2. Obtener el precio total requerido de settings
-      const config = await db.query.settings.findFirst();
-      const requiredAmount = config?.fullPaymentPrice || 1500;
-
-      // 3. Solo si ya cubrió el total, lo marcamos como completado
-      if (totalPaid >= requiredAmount) {
-        await db
-          .update(users)
-          .set({ registrationStatus: "completado" })
-          .where(eq(users.id, updatedPayment.userId));
-      } else {
-        await db
-          .update(users)
-          .set({ registrationStatus: "parcial" })
-          .where(eq(users.id, updatedPayment.userId));
+    // Un pago rechazado ya no necesita su comprobante
+    if (status === "rechazado" && updatedPayment.proofUrl) {
+      try {
+        await deleteFile(updatedPayment.proofUrl);
+      } catch (error) {
+        console.error("Error al eliminar comprobante:", error);
+        // No fallar si no se puede eliminar el archivo
       }
     }
 
@@ -484,6 +404,7 @@ export async function createAgendaDay(data: {
   date: string;
   sortOrder: number;
 }) {
+  await requireAdmin();
   await db.insert(agendaDays).values(data);
   revalidatePath("/admin/agenda");
   revalidatePath("/dashboard/agenda");
@@ -491,6 +412,7 @@ export async function createAgendaDay(data: {
 }
 
 export async function deleteAgendaDay(id: number) {
+  await requireAdmin();
   // Delete associated events first
   const dayIdStr = id.toString();
   await db.delete(events).where(eq(events.dayId, dayIdStr));
@@ -502,6 +424,7 @@ export async function deleteAgendaDay(id: number) {
 
 // --- GESTIÓN DE AGENDA ---
 export async function createEvent(data: any) {
+  await requireAdmin();
   try {
     await db.insert(events).values(data);
     revalidatePath("/admin/agenda");
@@ -513,6 +436,7 @@ export async function createEvent(data: any) {
 }
 
 export async function deleteEvent(eventId: number) {
+  await requireAdmin();
   await db.delete(events).where(eq(events.id, eventId));
   revalidatePath("/admin/agenda");
   revalidatePath("/dashboard/agenda");
@@ -526,6 +450,7 @@ export async function broadcastNotification(data: {
   type: string;
   isPinned: boolean;
 }) {
+  await requireAdmin();
   try {
     // Si el nuevo aviso es fijado, desfijamos todos los anteriores primero
     if (data.isPinned) {
@@ -546,6 +471,7 @@ export async function broadcastNotification(data: {
 // Usa ruta fija en R2: templates/carta-responsiva.pdf
 
 export async function uploadCartaResponsivaTemplate(formData: FormData) {
+  await requireAdmin();
   try {
     const file = formData.get("template") as File;
     if (!file) return { success: false, error: "No file provided" };
@@ -580,6 +506,7 @@ export async function getCartaResponsivaTemplate() {
 }
 
 export async function deleteCartaResponsivaTemplate() {
+  await requireAdmin();
   try {
     await deleteCartaResponsivaFromR2();
 
@@ -623,6 +550,7 @@ export async function updateSupportInfo(data: {
   supportEmail?: string;
   supportHours?: string;
 }) {
+  await requireAdmin();
   try {
     await db.update(settings).set({ ...data, updatedAt: new Date() });
     revalidatePath("/admin/dashboard");
@@ -639,6 +567,7 @@ export async function updateSupportInfo(data: {
 
 // --- PASSWORD RESET MANAGEMENT ---
 export async function generateTemporaryPassword(userId: string) {
+  await requireAdmin();
   try {
     const user = await db.query.users.findFirst({
       where: eq(users.id, userId),
@@ -682,6 +611,7 @@ export async function generateTemporaryPassword(userId: string) {
 }
 
 export async function resetUserPassword(userId: string) {
+  await requireAdmin();
   try {
     const user = await db.query.users.findFirst({
       where: eq(users.id, userId),

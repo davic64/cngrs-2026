@@ -2,6 +2,7 @@
 
 import { desc, eq, gt, and } from "drizzle-orm";
 import { db } from "@/db";
+import { requireAdmin } from "@/lib/admin-auth";
 import { settings, supportChats, supportMessages } from "@/db/schema";
 
 export async function createSupportChat(
@@ -28,6 +29,7 @@ export async function createSupportChat(
 }
 
 export async function updateTelegramConfig(token: string, chatId: string) {
+  await requireAdmin();
   const existing = await db.query.settings.findFirst();
   if (existing) {
     await db.update(settings).set({
@@ -44,6 +46,8 @@ export async function sendSupportMessage(
   message: string,
   sender: "visitor" | "admin",
 ) {
+  // Escribir como "admin" sólo lo puede hacer un admin; el visitante usa "visitor".
+  if (sender === "admin") await requireAdmin();
   const [msg] = await db
     .insert(supportMessages)
     .values({ chatId, sender, message })
@@ -109,6 +113,7 @@ export async function getSupportMessages(chatId: string, afterId?: number) {
 }
 
 export async function getActiveSupportChats() {
+  await requireAdmin();
   return await db.query.supportChats.findMany({
     where: eq(supportChats.status, "active"),
     with: { messages: true },
@@ -117,6 +122,7 @@ export async function getActiveSupportChats() {
 }
 
 export async function getAllSupportChats() {
+  await requireAdmin();
   return await db.query.supportChats.findMany({
     with: { messages: true },
     orderBy: [desc(supportChats.updatedAt)],
@@ -124,6 +130,7 @@ export async function getAllSupportChats() {
 }
 
 export async function closeSupportChat(chatId: string) {
+  await requireAdmin();
   await db
     .update(supportChats)
     .set({ status: "closed", updatedAt: new Date() })
