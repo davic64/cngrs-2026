@@ -139,13 +139,18 @@ export function AdminUsersClient({
       { header: "Fecha Registro", key: "createdAt", width: 16 },
       { header: "Foto Perfil (URL)", key: "profileUrl", width: 50 },
       { header: "Documento (URL)", key: "documentUrl", width: 50 },
+      { header: "Comprobantes (URL)", key: "proofUrls", width: 50 },
     ];
 
     const genderLabel = (g: string) =>
       g === "M" ? "Masculino" : g === "F" ? "Femenino" : "Otro";
 
     for (const u of initialUsers) {
-      const payments: { status: string; amount: number }[] = u.payments ?? [];
+      const payments: {
+        status: string;
+        amount: number;
+        proofUrl: string | null;
+      }[] = u.payments ?? [];
       const totalPaid = payments
         .filter((p) => p.status === "completado")
         .reduce((sum, p) => sum + p.amount, 0);
@@ -170,6 +175,11 @@ export function AdminUsersClient({
         createdAt: new Date(u.createdAt).toLocaleDateString("es-MX"),
         profileUrl: u.profilePhotoUrl ?? "",
         documentUrl: u.documentUrl ?? "",
+        // Rechazados no: su comprobante se borra al rechazar
+        proofUrls: payments
+          .filter((p) => p.proofUrl && p.status !== "rechazado")
+          .map((p) => p.proofUrl)
+          .join("\n"),
       });
     }
 
@@ -195,6 +205,7 @@ export function AdminUsersClient({
     // URLs: ajustar texto para que no se salgan de la celda
     ws.getColumn("profileUrl").alignment = { wrapText: true, vertical: "top" };
     ws.getColumn("documentUrl").alignment = { wrapText: true, vertical: "top" };
+    ws.getColumn("proofUrls").alignment = { wrapText: true, vertical: "top" };
 
     // Zebra + bordes suaves + Arial en datos
     ws.eachRow((row, n) => {
