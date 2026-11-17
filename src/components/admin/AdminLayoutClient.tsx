@@ -10,6 +10,7 @@ import {
   LogOut,
   MapPin,
   MessageCircle,
+  ScanLine,
   Users,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -37,6 +38,7 @@ const iconMap: Record<string, React.ReactNode> = {
   Calendar: <Calendar size={20} />,
   Bell: <Bell size={20} />,
   MessageCircle: <MessageCircle size={20} />,
+  ScanLine: <ScanLine size={20} />,
 };
 
 export default function AdminLayoutClient({

@@ -25,6 +25,11 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
       href: "/admin/dashboard",
     },
     {
+      icon: "ScanLine",
+      label: "Escáner QR",
+      href: "/admin/scanner",
+    },
+    {
       icon: "Users",
       label: "Asistentes",
       href: "/admin/users",

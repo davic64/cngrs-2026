@@ -60,6 +60,7 @@ export const users = pgTable("users", {
     .default("pendiente")
     .notNull(),
   passwordResetRequired: boolean("password_reset_required").default(false),
+  checkedInAt: timestamp("checked_in_at"), // primer escaneo del QR en la entrada
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
