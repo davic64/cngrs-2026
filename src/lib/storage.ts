@@ -17,10 +17,32 @@ export const r2Client = new S3Client({
   },
 });
 
+// HEIC (iPhone) por contenido, no por nombre: llegan fotos HEIC llamadas .jpg
+function isHeic(buffer: Buffer) {
+  return (
+    buffer.subarray(4, 8).toString() === "ftyp" &&
+    /^(heic|heix|hevc|hevx|heim|heis|mif1|msf1)$/.test(
+      buffer.subarray(8, 12).toString(),
+    )
+  );
+}
+
 export async function uploadFile(file: File, folder: string) {
   try {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const fileExtension = file.name.split(".").pop();
+    let buffer = Buffer.from(await file.arrayBuffer());
+    let fileExtension = file.name.split(".").pop();
+    let contentType = file.type;
+
+    // Chrome no muestra HEIC: se guarda como JPEG
+    if (isHeic(buffer)) {
+      const { default: convert } = await import("heic-convert");
+      buffer = Buffer.from(
+        await convert({ buffer, format: "JPEG", quality: 0.85 }),
+      );
+      fileExtension = "jpg";
+      contentType = "image/jpeg";
+    }
+
     const fileName = `${folder}/${crypto.randomUUID()}.${fileExtension}`;
 
     await r2Client.send(
@@ -28,7 +50,7 @@ export async function uploadFile(file: File, folder: string) {
         Bucket: process.env.R2_BUCKET_NAME,
         Key: fileName,
         Body: buffer,
-        ContentType: file.type,
+        ContentType: contentType,
       }),
     );
 
