@@ -8,7 +8,7 @@ import { db } from "@/db";
 import { temporaryFiles } from "@/db/schema";
 import { eq, lt, and } from "drizzle-orm";
 
-const r2Client = new S3Client({
+export const r2Client = new S3Client({
   region: "auto",
   endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
   credentials: {
